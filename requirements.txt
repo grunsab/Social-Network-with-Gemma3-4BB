@@ -7,3 +7,5 @@ openai
 python-dotenv
 # deepinfra
 Flask-Migrate
+gunicorn
+psycopg2-binary
