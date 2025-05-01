@@ -6,3 +6,4 @@ bcrypt
 openai
 python-dotenv
 # deepinfra
+Flask-Migrate
