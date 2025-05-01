@@ -6,6 +6,9 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from extensions import db, login_manager, migrate
 import json # Add json import
+import boto3 # Add boto3 import
+import uuid # Add uuid import
+import base64 # Add base64 import
 
 load_dotenv()
 
@@ -18,6 +21,25 @@ if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# --- AWS S3 Configuration ---
+# Best practice: Load from environment variables
+S3_BUCKET = os.environ.get("S3_BUCKET", "socialnetwork")
+S3_KEY = os.environ.get("S3_KEY")
+S3_SECRET = os.environ.get("S3_SECRET_ACCESS_KEY")
+S3_REGION = os.environ.get("S3_REGION", "us-west-2") # Default region if not set
+
+s3_client = None
+if S3_BUCKET and S3_KEY and S3_SECRET:
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=S3_KEY,
+        aws_secret_access_key=S3_SECRET,
+        region_name=S3_REGION
+    )
+    print(f"INFO: S3 Client initialized for bucket {S3_BUCKET} in region {S3_REGION}")
+else:
+    print("WARN: S3 credentials not found in environment variables. Image upload will be disabled.")
 
 openai = OpenAI(
     api_key=os.environ.get('OPENAI_API_KEY'),
@@ -94,6 +116,91 @@ def classify_post_with_gemma(post_content):
         print(f"ERROR: An error occurred during post classification: {e}")
         return None
 
+def classify_image_with_gemma(image_data):
+    """
+    Classifies image data into categories with scores using the configured Gemma multimodal endpoint.
+    Input: image_data (bytes)
+    Returns: Dictionary of {category: score} or None if classification fails.
+    """
+    print(f"INFO: Classifying image of size {len(image_data)} bytes...")
+    if not image_data:
+        print("ERROR: No image data provided for classification.")
+        return None
+
+    # Reuse the same categories as text classification
+    categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
+                  "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
+                   "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature", "Other"]
+
+    try:
+        # Encode the image data to base64
+        base64_image = base64.b64encode(image_data).decode('utf-8')
+
+        # Define the prompt for image classification into categories
+        image_prompt = f"""Classify the subject matter of the following image into relevant categories from the list below.
+Provide a relevance score between 0.0 and 1.0 for each category you assign (higher means more relevant).
+Return the results as a JSON object where keys are category names and values are their scores.
+Only include categories with a score > 0.1.
+If no category seems relevant or confidence is low, return an empty JSON object {{}}.
+Categories: {", ".join(categories)}
+JSON Output:"""
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": image_prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ]
+
+        chat_completion = openai.chat.completions.create(
+            model="google/gemma-3-4b-it", # Ensure this model supports image input and JSON output
+            messages=messages,
+            response_format={"type": "json_object"}, # Request JSON output
+            max_tokens=1024 # Increase tokens slightly for potential JSON list
+        )
+
+        response_content = chat_completion.choices[0].message.content.strip()
+        print(f"DEBUG: Gemma image classification JSON response: {response_content}")
+
+        # Parse and validate the JSON response
+        category_scores = json.loads(response_content)
+
+        if not isinstance(category_scores, dict):
+            print("ERROR: Image classification result is not a dictionary.")
+            return None
+
+        validated_scores = {}
+        for category, score in category_scores.items():
+            if category in categories and isinstance(score, (int, float)) and 0.0 <= score <= 1.0:
+                 validated_scores[category] = float(score)
+            else:
+                print(f"WARN: Invalid category '{category}' or score '{score}' received from image classification, skipping.")
+
+        if not validated_scores:
+            print("INFO: No relevant categories found for image or low confidence.")
+            return {}
+
+        return validated_scores
+
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Failed to decode JSON response from image classification model: {e}")
+        logged_response = locals().get('response_content', 'Response content unavailable')
+        print(f"Response was: {logged_response}")
+        return None
+    except Exception as e:
+        print(f"ERROR: An error occurred during image classification: {e}")
+        return None
 
 # --- Models (Defined in models.py, imported here) ---
 # We will define models in a separate file later.
@@ -207,50 +314,134 @@ def logout():
 @login_required
 def create_post():
     if request.method == 'POST':
-        content = request.form['content']
-        if content:
-            # Classify the post using the updated function
-            category_scores = classify_post_with_gemma(content)
+        content = request.form.get('content', '') # Use .get with default
+        image_file = request.files.get('image') # Get optional image file
 
-            if category_scores is None:
-                flash('There was an error classifying your post. Please try again.', 'danger')
-                return render_template('create_post.html')
+        if not content and not image_file:
+            flash('Post cannot be empty. Please provide text or an image.', 'warning')
+            return render_template('create_post.html')
 
-            # Create the post *without* the category field
-            new_post = Post(content=content, user_id=current_user.id)
-            db.session.add(new_post)
-            # We need to flush to get the new_post.id before creating PostCategoryScore
-            db.session.flush()
+        image_url = None
+        image_classification_result = None
 
-            if not category_scores: # Handle empty dict (no categories found)
-                flash('Post created, but no specific categories were identified.', 'info')
+        # --- Handle Image Upload ---
+        if image_file and s3_client and S3_BUCKET:
+            if image_file.filename == '':
+                flash('No selected file', 'warning')
+                # Decide if this is an error or just means no image intended
+                # return render_template('create_post.html') # Optional: uncomment if filename must exist
             else:
-                flash_categories = []
-                # Add PostCategoryScore entries and update UserInterest
-                for category, score in category_scores.items():
-                    # Create score entry for the post
-                    post_cat_score = PostCategoryScore(post_id=new_post.id, category=category, score=score)
-                    db.session.add(post_cat_score)
-                    flash_categories.append(f"{category} ({score:.2f})")
+                # Secure filename and generate unique key
+                # filename = secure_filename(image_file.filename) # Consider using secure_filename if needed
+                # Generate unique name to avoid collisions
+                file_extension = os.path.splitext(image_file.filename)[1]
+                unique_filename = f"images/{uuid.uuid4()}{file_extension}"
 
-                    # Update UserInterest
-                    interest = UserInterest.query.filter_by(user_id=current_user.id, category=category).first()
-                    if interest:
-                        # Simple weighted update: add the score of the new post
-                        # More complex logic could be used (e.g., decaying older scores)
-                        interest.score += score
+                try:
+                    # Read file data for classification and upload
+                    image_data = image_file.read()
+                    image_file.seek(0) # Reset stream position after reading
+
+                    # Upload to S3
+                    s3_client.upload_fileobj(
+                        image_file,
+                        S3_BUCKET,
+                        unique_filename
+                        # ExtraArgs={'ACL': 'public-read'} # Optional: if you want images to be publicly accessible directly
+                    )
+                    # Construct the S3 URL (adjust based on your bucket/region/settings)
+                    image_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{unique_filename}"
+                    print(f"INFO: Image uploaded to {image_url}")
+
+                    # Classify the image (using placeholder)
+                    image_classification_result = classify_image_with_gemma(image_data)
+                    if image_classification_result:
+                         print(f"INFO: Image classified: {image_classification_result}")
                     else:
-                        # Create new interest record with the score from this post
-                        interest = UserInterest(user_id=current_user.id, category=category, score=score)
-                        db.session.add(interest)
-                
-                flash(f'Post created and classified: {", ".join(flash_categories)}', 'success')
+                         print("WARN: Image classification failed or returned None.")
+
+
+                except Exception as e:
+                    print(f"ERROR: Failed to upload image to S3: {e}")
+                    flash(f'Image upload failed: {e}', 'danger')
+                    # Decide if failure should prevent post creation
+                    # return render_template('create_post.html') # Optional
+
+        elif image_file and not s3_client:
+            flash('Image provided, but S3 is not configured. Image was not saved.', 'warning')
+
+        # --- Handle Text Content and Classification ---
+        category_scores = None
+        if content:
+            category_scores = classify_post_with_gemma(content)
+            if category_scores is None:
+                flash('There was an error classifying your post text. Please try again.', 'danger')
+                # Decide if text classification failure should prevent post creation
+                # return render_template('create_post.html') # Optional
+
+        # --- Create and Save Post ---
+        try:
+            # Create the post with text, image URL, and image classification
+            new_post = Post(
+                content=content,
+                user_id=current_user.id,
+                image_url=image_url,
+                image_classification=image_classification_result # Store results (can be None)
+            )
+            db.session.add(new_post)
+            db.session.flush() # Get new_post.id for category scores
+
+            flash_messages = []
+            if content:
+                if category_scores: # Only process text scores if classification was successful
+                    flash_categories = []
+                    for category, score in category_scores.items():
+                        post_cat_score = PostCategoryScore(post_id=new_post.id, category=category, score=score)
+                        db.session.add(post_cat_score)
+                        flash_categories.append(f"{category} ({score:.2f})")
+
+                        interest = UserInterest.query.filter_by(user_id=current_user.id, category=category).first()
+                        if interest:
+                            interest.score += score
+                        else:
+                            interest = UserInterest(user_id=current_user.id, category=category, score=score)
+                            db.session.add(interest)
+                    if flash_categories:
+                        flash_messages.append(f'Text classified: {", ".join(flash_categories)}')
+                    else:
+                        flash_messages.append('Text content added, but no specific categories identified.')
+                else:
+                     # Text content exists but classification failed or returned None
+                     flash_messages.append('Text content added (classification failed or skipped).')
+            elif not content and image_url:
+                 flash_messages.append('Image posted.') # Message when only image exists
+            elif content and image_url:
+                 flash_messages.append('Post with text and image created.') # Message when both exist
+
+            if image_url and image_classification_result:
+                # You might want a more user-friendly message here based on the classification
+                flash_messages.append(f'Image classified (Placeholder: {image_classification_result.get("description", "N/A")})')
+            elif image_url:
+                 flash_messages.append('Image added (classification failed or skipped).')
+
+            # Combine flash messages
+            if flash_messages:
+                flash(' '.join(flash_messages), 'success')
+            else:
+                # This case shouldn't happen due to initial checks, but as a fallback:
+                 flash('Post created.', 'success')
+
 
             db.session.commit()
             return redirect(url_for('index'))
-        else:
-            flash('Post content cannot be empty!', 'warning')
-            return render_template('create_post.html')
+
+        except Exception as e:
+            db.session.rollback() # Rollback in case of error during commit
+            print(f"ERROR: Failed to save post to database: {e}")
+            flash(f'Error creating post: {e}', 'danger')
+            return render_template('create_post.html') # Re-render form on error
+
+    # GET request
     return render_template('create_post.html')
 
 @app.route('/post/<int:post_id>/delete', methods=['POST'])
