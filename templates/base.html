@@ -12,6 +12,29 @@
         .profile-header { margin-bottom: 2rem; padding: 1.5rem; background-color: #ffffff; border-radius: 0.25rem; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
         .form-signin, .form-register { max-width: 380px; padding: 1rem; margin: auto; background-color: #ffffff; border-radius: 0.25rem; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
         .flash-messages { margin-top: 1rem; }
+
+        /* Styles for code blocks */
+        .post-content pre {
+            background-color: #e9ecef; /* Light grey background */
+            border: 1px solid #ced4da; /* Subtle border */
+            border-radius: 0.25rem;   /* Rounded corners */
+            padding: 1rem;            /* Padding inside the block */
+            overflow-x: auto;         /* Add scrollbars if code is too wide */
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; /* Monospace font */
+            font-size: 0.875em;       /* Slightly smaller font */
+        }
+        .post-content code {
+            color: #d63384; /* Pinkish color for inline code, adjust as needed */
+            word-wrap: break-word;
+        }
+        /* Ensure <pre><code> combination gets the block styling correctly */
+        .post-content pre code {
+            color: inherit; /* Inherit color from pre for block code */
+            background-color: transparent; /* No background for code inside pre */
+            padding: 0;               /* No padding for code inside pre */
+            border-radius: 0;         /* No border-radius for code inside pre */
+            font-size: inherit;       /* Inherit font size from pre */
+        }
     </style>
 </head>
 <body>
@@ -83,6 +106,9 @@
 
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+    <!-- Marked.js library for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     {# Script to set the current year in the footer #}
     <script>

@@ -24,7 +24,10 @@
                         <h5 class="card-title">
                            <a href="{{ url_for('profile', username=post.author.username) }}" class="text-decoration-none">@{{ post.author.username }}</a>
                         </h5>
-                        <p class="card-text">{{ post.content }}</p>
+                        {# Wrap post content in a div with a specific class and store raw content in data attribute #}
+                        <div class="post-content" data-raw-content="{{ post.content|e }}">
+                            {# Content will be rendered here by JavaScript #}
+                        </div>
                         <p class="card-text">
                             <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
                             {# Display multiple categories/scores if they exist #}
@@ -46,4 +49,23 @@
         {% endif %}
     </div>
 </div>
+
+{# Add script to render markdown after the loop #}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const postContents = document.querySelectorAll('.post-content');
+    postContents.forEach(div => {
+      const rawContent = div.getAttribute('data-raw-content');
+      if (rawContent) {
+        // Configure marked to handle basic GFM line breaks
+        marked.setOptions({
+          breaks: true
+        });
+        // Use innerHTML as marked returns HTML string. Ensure content is properly escaped on server.
+        div.innerHTML = marked.parse(rawContent);
+      }
+    });
+  });
+</script>
+
 {% endblock %} 

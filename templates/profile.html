@@ -17,7 +17,10 @@
                 <div class="card post-card shadow-sm">
                     <div class="card-body">
                          {# No need to link author name on their own profile #}
-                        <p class="card-text">{{ post.content }}</p>
+                        {# Wrap post content in a div with a specific class and store raw content in data attribute #}
+                        <div class="post-content" data-raw-content="{{ post.content|e }}">
+                            {# Content will be rendered here by JavaScript #}
+                        </div>
                         <p class="card-text">
                             <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
                             {# Display multiple categories/scores if they exist #}
@@ -57,4 +60,23 @@
         </div>
     </div>
 </div>
+
+{# Add script to render markdown after the loop (identical to index.html) #}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const postContents = document.querySelectorAll('.post-content');
+    postContents.forEach(div => {
+      const rawContent = div.getAttribute('data-raw-content');
+      if (rawContent) {
+        // Configure marked to handle basic GFM line breaks
+        marked.setOptions({
+          breaks: true
+        });
+        // Use innerHTML as marked returns HTML string. Ensure content is properly escaped on server.
+        div.innerHTML = marked.parse(rawContent);
+      }
+    });
+  });
+</script>
+
 {% endblock %} 
