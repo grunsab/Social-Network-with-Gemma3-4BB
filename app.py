@@ -248,8 +248,31 @@ def create_post():
             db.session.commit()
             return redirect(url_for('index'))
         else:
-            flash('Post content cannot be empty', 'warning')
+            flash('Post content cannot be empty!', 'warning')
+            return render_template('create_post.html')
     return render_template('create_post.html')
+
+@app.route('/post/<int:post_id>/delete', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    post_to_delete = Post.query.get_or_404(post_id)
+    if post_to_delete.author != current_user:
+        # Prevent users from deleting others' posts
+        flash('You do not have permission to delete this post.', 'danger')
+        return redirect(url_for('index')) # Or perhaps back to the referring page
+
+    try:
+        db.session.delete(post_to_delete)
+        db.session.commit()
+        flash('Post deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting post: {e}', 'danger')
+        print(f"Error deleting post {post_id}: {e}") # Log the error
+
+    # Redirect back to the index page or potentially the user's profile
+    # Consider redirecting to request.referrer if it's safe and available
+    return redirect(url_for('index'))
 
 @app.route('/profile/<username>')
 @login_required
