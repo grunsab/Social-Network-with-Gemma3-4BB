@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ user.username }}'s Profile{% endblock %}
+
+{% block content %}
+    <h1>{{ user.username }}'s Profile</h1>
+
+    <h2>Interests (Based on Posts)</h2>
+    {% if interests %}
+        <ul class="user-interests">
+            {% for interest in interests %}
+                <li>{{ interest.category }} ({{ interest.score }})</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No interests recorded yet. Create posts to build your interest profile!</p>
+    {% endif %}
+
+    <h2>{{ user.username }}'s Posts</h2>
+    {% if posts %}
+        {% for post in posts %}
+            <div class="post">
+                <p class="post-meta">
+                    Posted on {{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}
+                    {% if post.category %}
+                         | <span class="post-category">{{ post.category }}</span>
+                    {% endif %}
+                </p>
+                <p>{{ post.content }}</p>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>{{ user.username }} hasn't posted anything yet.</p>
+    {% endif %}
+{% endblock %} 
