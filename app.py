@@ -37,7 +37,7 @@ def classify_post_with_gemma(post_content):
     print(f"INFO: Classifying post: {post_content[:50]}...")
     categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
                   "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
-                   "Health", "Fitness", "Beauty", "Fashion", "Pets", "Other"]
+                   "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Other"]
     prompt = f"""Classify the following post content into relevant categories from the list below.
     Provide a relevance score between 0.0 and 1.0 for each category you assign (higher means more relevant).
     Return the results as a JSON object where keys are category names and values are their scores.
