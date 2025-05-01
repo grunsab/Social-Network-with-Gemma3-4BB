@@ -12,7 +12,11 @@ load_dotenv()
 # --- Configuration ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key') # Change in production!
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///social_network.db')
+# Ensure DATABASE_URL uses the correct dialect prefix for SQLAlchemy
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///social_network.db')
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 openai = OpenAI(
