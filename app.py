@@ -336,25 +336,31 @@ def personalized_feed():
     interested_categories = [interest.category for interest in user_interests]
 
     if not interested_categories:
-        # If no interests, show recent posts
-        posts = Post.query.order_by(Post.timestamp.desc()).limit(50).all()
+        # If no interests, show recent posts (excluding user's own)
+        posts = Post.query.filter(Post.user_id != current_user.id).order_by(Post.timestamp.desc()).limit(50).all()
         flash("Explore posts to build your personalized feed!", "info")
     else:
-        # Fetch posts that have a score in ANY of the user's top interested categories.
+        # Fetch posts that have a score in ANY of the user's top interested categories,
+        # EXCLUDING the user's own posts.
         # We use distinct() to avoid duplicate posts if a post matches multiple categories.
-        posts = db.session.query(Post).distinct() \
+        posts_query = db.session.query(Post).distinct() \
             .join(PostCategoryScore, Post.id == PostCategoryScore.post_id) \
             .filter(PostCategoryScore.category.in_(interested_categories)) \
-            .order_by(Post.timestamp.desc()) \
-            .limit(50) \
-            .all()
+            .filter(Post.user_id != current_user.id) # Exclude user's own posts
+
+        posts = posts_query.order_by(Post.timestamp.desc()).limit(50).all()
+
 
         # Maybe add some recent posts not in categories if the feed is too small?
         if len(posts) < 10:
-             # Get some recent posts to supplement, excluding ones already fetched
+             # Get some recent posts to supplement, excluding ones already fetched and user's own
              existing_post_ids = [p.id for p in posts]
-             # Ensure we don't fetch posts already in the list
-             recent_posts = Post.query.filter(Post.id.notin_(existing_post_ids)).order_by(Post.timestamp.desc()).limit(10).all()
+             # Ensure we don't fetch posts already in the list OR user's own posts
+             recent_posts = Post.query.filter(Post.user_id != current_user.id) \
+                                      .filter(Post.id.notin_(existing_post_ids)) \
+                                      .order_by(Post.timestamp.desc()) \
+                                      .limit(10) \
+                                      .all()
              posts.extend(recent_posts)
 
     return render_template('index.html', posts=posts, feed_type="Personalized")
