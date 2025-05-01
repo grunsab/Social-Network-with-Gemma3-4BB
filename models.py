@@ -22,7 +22,7 @@ class Post(db.Model):
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    category = db.Column(db.String(50), index=True, nullable=True) # Storing the Gemma classification
+    category_scores = db.relationship('PostCategoryScore', backref='post', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Post {self.content[:50]}...>'
@@ -30,14 +30,27 @@ class Post(db.Model):
 class UserInterest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    category = db.Column(db.String(50), nullable=False)
-    score = db.Column(db.Integer, default=1) # Simple score, incremented per post in category
+    category = db.Column(db.String(50), nullable=False, index=True)
+    score = db.Column(db.Float, default=0.0)
 
     # Ensure a user has only one interest record per category
     __table_args__ = (db.UniqueConstraint('user_id', 'category', name='uq_user_category'),)
 
     def __repr__(self):
         return f'<UserInterest User: {self.user_id} Category: {self.category} Score: {self.score}>'
+
+# NEW Model for Post Category Scores
+class PostCategoryScore(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    category = db.Column(db.String(50), nullable=False, index=True)
+    score = db.Column(db.Float, nullable=False)
+
+    # Ensure a post has only one score per category
+    __table_args__ = (db.UniqueConstraint('post_id', 'category', name='uq_post_category_score'),)
+
+    def __repr__(self):
+        return f'<PostCategoryScore Post: {self.post_id} Cat: {self.category} Score: {self.score}>'
 
 # New InviteCode model
 class InviteCode(db.Model):

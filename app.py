@@ -5,6 +5,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 from extensions import db, login_manager, migrate
+import json # Add json import
 
 load_dotenv()
 
@@ -26,26 +27,72 @@ migrate.init_app(app, db)
 
 def classify_post_with_gemma(post_content):
     """
-    Placeholder function to simulate post classification.
-    Replace with actual Gemma model integration.
-    Returns a category string.
+    Classifies post content into multiple categories with scores using Gemma.
+    Returns a dictionary of {category: score} or None if classification fails.
     """
-    print(f"INFO: Classifying post (placeholder): {post_content[:50]}...")
+    print(f"INFO: Classifying post: {post_content[:50]}...")
+    categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Other"]
+    prompt = f"""Classify the following post content into relevant categories from the list below.
+    Provide a relevance score between 0.0 and 1.0 for each category you assign (higher means more relevant).
+    Return the results as a JSON object where keys are category names and values are their scores.
+    Only include categories with a score > 0.1.
+    If no category seems relevant or confidence is low, return an empty JSON object {{}}.
+    Categories: {", ".join(categories)}
+    Post Content: {post_content}
+    JSON Output:"""
 
-    chat_completion = openai.chat.completions.create(
-        model="google/gemma-3-4b-it",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that classifies posts into categories. The categories are: Technology, Travel, Food, Art, Sports, News, Lifestyle, Other. Return with only the category name."},
-            {"role": "user", "content": post_content}],
-    )
+    try:
+        chat_completion = openai.chat.completions.create(
+            model="google/gemma-3-4b-it", # Or another suitable model
+            messages=[
+                # System prompt can be simpler if instructions are in user prompt
+                {"role": "system", "content": "You are an assistant that classifies posts into categories and provides relevance scores as a JSON object."}, 
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"} # Request JSON output if model supports it
+        )
 
-    return chat_completion.choices[0].message.content.strip()
+        response_content = chat_completion.choices[0].message.content.strip()
+        print(f"DEBUG: Gemma response: {response_content}")
+
+        # Parse the JSON response
+        category_scores = json.loads(response_content)
+
+        # Basic validation (ensure it's a dict and scores are numbers)
+        if not isinstance(category_scores, dict):
+            print("ERROR: Classification result is not a dictionary.")
+            return None
+        
+        validated_scores = {}
+        for category, score in category_scores.items():
+            if category in categories and isinstance(score, (int, float)) and 0.0 <= score <= 1.0:
+                 validated_scores[category] = float(score)
+            else:
+                print(f"WARN: Invalid category '{category}' or score '{score}' received, skipping.")
+
+        if not validated_scores:
+            print("INFO: No relevant categories found or low confidence.")
+            # Optionally assign 'Other' if needed, or return None/empty dict
+            # return {"Other": 0.1}
+            return {}
+
+        return validated_scores
+
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Failed to decode JSON response from classification model: {e}")
+        # It's likely response_content exists if JSON decoding failed, but check just in case.
+        logged_response = locals().get('response_content', 'Response content unavailable')
+        print(f"Response was: {logged_response}")
+        return None
+    except Exception as e:
+        print(f"ERROR: An error occurred during post classification: {e}")
+        return None
 
 
 # --- Models (Defined in models.py, imported here) ---
 # We will define models in a separate file later.
 # For now, let's assume User and Post models exist.
-from models import User, Post, UserInterest, InviteCode
+from models import User, Post, UserInterest, InviteCode, PostCategoryScore
 
 # --- User Loader for Flask-Login ---
 @login_manager.user_loader
@@ -156,28 +203,47 @@ def create_post():
     if request.method == 'POST':
         content = request.form['content']
         if content:
-            # Classify the post using our placeholder
-            category = classify_post_with_gemma(content)
+            # Classify the post using the updated function
+            category_scores = classify_post_with_gemma(content)
 
-            # Create and save the post
-            new_post = Post(content=content, user_id=current_user.id, category=category)
+            if category_scores is None:
+                flash('There was an error classifying your post. Please try again.', 'danger')
+                return render_template('create_post.html')
+
+            # Create the post *without* the category field
+            new_post = Post(content=content, user_id=current_user.id)
             db.session.add(new_post)
+            # We need to flush to get the new_post.id before creating PostCategoryScore
+            db.session.flush()
 
-            # Learn user interest (simple implementation)
-            # Check if interest already exists
-            interest = UserInterest.query.filter_by(user_id=current_user.id, category=category).first()
-            if interest:
-                interest.score += 1 # Increment score if interest exists
+            if not category_scores: # Handle empty dict (no categories found)
+                flash('Post created, but no specific categories were identified.', 'info')
             else:
-                # Create new interest record
-                interest = UserInterest(user_id=current_user.id, category=category, score=1)
-                db.session.add(interest)
+                flash_categories = []
+                # Add PostCategoryScore entries and update UserInterest
+                for category, score in category_scores.items():
+                    # Create score entry for the post
+                    post_cat_score = PostCategoryScore(post_id=new_post.id, category=category, score=score)
+                    db.session.add(post_cat_score)
+                    flash_categories.append(f"{category} ({score:.2f})")
+
+                    # Update UserInterest
+                    interest = UserInterest.query.filter_by(user_id=current_user.id, category=category).first()
+                    if interest:
+                        # Simple weighted update: add the score of the new post
+                        # More complex logic could be used (e.g., decaying older scores)
+                        interest.score += score
+                    else:
+                        # Create new interest record with the score from this post
+                        interest = UserInterest(user_id=current_user.id, category=category, score=score)
+                        db.session.add(interest)
+                
+                flash(f'Post created and classified: {", ".join(flash_categories)}', 'success')
 
             db.session.commit()
-            flash(f'Post created and classified as: {category}')
             return redirect(url_for('index'))
         else:
-            flash('Post content cannot be empty')
+            flash('Post content cannot be empty', 'warning')
     return render_template('create_post.html')
 
 @app.route('/profile/<username>')
