@@ -20,8 +20,13 @@
                         <p class="card-text">{{ post.content }}</p>
                         <p class="card-text">
                             <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
-                            {% if post.category %}
-                                <span class="badge bg-secondary float-end">{{ post.category }}</span>
+                            {# Display multiple categories/scores if they exist #}
+                            {% if post.category_scores %}
+                                <span class="float-end">
+                                {% for score in post.category_scores|sort(attribute='score', reverse=True) %}
+                                     <span class="badge bg-secondary me-1">{{ score.category }} ({{ '%0.2f'|format(score.score) }})</span>
+                                {% endfor %}
+                                </span>
                             {% endif %}
                         </p>
                     </div>

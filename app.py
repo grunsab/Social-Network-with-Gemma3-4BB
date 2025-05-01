@@ -302,23 +302,31 @@ def manage_invites():
 @app.route('/feed')
 @login_required
 def personalized_feed():
+    # Get top user interests (categories) based on score
     user_interests = UserInterest.query.filter_by(user_id=current_user.id).order_by(UserInterest.score.desc()).limit(5).all()
     interested_categories = [interest.category for interest in user_interests]
 
     if not interested_categories:
         # If no interests, show recent posts
         posts = Post.query.order_by(Post.timestamp.desc()).limit(50).all()
-        flash("Explore posts to build your personalized feed!")
+        flash("Explore posts to build your personalized feed!", "info")
     else:
-        # Fetch posts matching the user's top interests
-        posts = Post.query.filter(Post.category.in_(interested_categories)).order_by(Post.timestamp.desc()).limit(50).all()
+        # Fetch posts that have a score in ANY of the user's top interested categories.
+        # We use distinct() to avoid duplicate posts if a post matches multiple categories.
+        posts = db.session.query(Post).distinct() \
+            .join(PostCategoryScore, Post.id == PostCategoryScore.post_id) \
+            .filter(PostCategoryScore.category.in_(interested_categories)) \
+            .order_by(Post.timestamp.desc()) \
+            .limit(50) \
+            .all()
+
         # Maybe add some recent posts not in categories if the feed is too small?
         if len(posts) < 10:
              # Get some recent posts to supplement, excluding ones already fetched
              existing_post_ids = [p.id for p in posts]
+             # Ensure we don't fetch posts already in the list
              recent_posts = Post.query.filter(Post.id.notin_(existing_post_ids)).order_by(Post.timestamp.desc()).limit(10).all()
              posts.extend(recent_posts)
-
 
     return render_template('index.html', posts=posts, feed_type="Personalized")
 
