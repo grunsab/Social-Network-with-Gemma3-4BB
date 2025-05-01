@@ -9,6 +9,7 @@ import json # Add json import
 import boto3 # Add boto3 import
 import uuid # Add uuid import
 import base64 # Add base64 import
+from sqlalchemy import or_ # Import 'or_' operator
 
 load_dotenv()
 
@@ -24,7 +25,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- AWS S3 Configuration ---
 # Best practice: Load from environment variables
-S3_BUCKET = os.environ.get("S3_BUCKET", "socialnetwork")
+S3_BUCKET = os.environ.get("S3_BUCKET", "socialnetworkgemma")
 S3_KEY = os.environ.get("S3_KEY")
 S3_SECRET = os.environ.get("S3_SECRET_ACCESS_KEY")
 S3_REGION = os.environ.get("S3_REGION", "us-west-2") # Default region if not set
@@ -392,6 +393,7 @@ def create_post():
             db.session.flush() # Get new_post.id for category scores
 
             flash_messages = []
+            # --- Process Text Classification Scores ---
             if content:
                 if category_scores: # Only process text scores if classification was successful
                     flash_categories = []
@@ -400,9 +402,10 @@ def create_post():
                         db.session.add(post_cat_score)
                         flash_categories.append(f"{category} ({score:.2f})")
 
+                        # Update UserInterest for text categories
                         interest = UserInterest.query.filter_by(user_id=current_user.id, category=category).first()
                         if interest:
-                            interest.score += score
+                            interest.score += score # Accumulate score
                         else:
                             interest = UserInterest(user_id=current_user.id, category=category, score=score)
                             db.session.add(interest)
@@ -415,14 +418,31 @@ def create_post():
                      flash_messages.append('Text content added (classification failed or skipped).')
             elif not content and image_url:
                  flash_messages.append('Image posted.') # Message when only image exists
-            elif content and image_url:
-                 flash_messages.append('Post with text and image created.') # Message when both exist
+            # Removed redundant message for 'content and image_url' as specifics are handled below
 
-            if image_url and image_classification_result:
-                # You might want a more user-friendly message here based on the classification
-                flash_messages.append(f'Image classified (Placeholder: {image_classification_result.get("description", "N/A")})')
-            elif image_url:
-                 flash_messages.append('Image added (classification failed or skipped).')
+            # --- Process Image Classification Scores ---
+            if image_url: # Only process if an image was successfully uploaded
+                if image_classification_result:
+                    flash_img_categories = []
+                    for category, score in image_classification_result.items():
+                        # Note: We don't have a separate table for image scores on posts,
+                        # but we *do* update UserInterest based on them.
+                        flash_img_categories.append(f"{category} ({score:.2f})")
+
+                        # Update UserInterest for image categories
+                        interest = UserInterest.query.filter_by(user_id=current_user.id, category=category).first()
+                        if interest:
+                            interest.score += score # Accumulate score
+                        else:
+                            interest = UserInterest(user_id=current_user.id, category=category, score=score)
+                            db.session.add(interest)
+                    if flash_img_categories:
+                         flash_messages.append(f'Image classified: {", ".join(flash_img_categories)}')
+                    else:
+                         flash_messages.append('Image added, but no specific categories identified.')
+
+                else:
+                     flash_messages.append('Image added (classification failed or skipped).')
 
             # Combine flash messages
             if flash_messages:
@@ -531,14 +551,42 @@ def personalized_feed():
         posts = Post.query.filter(Post.user_id != current_user.id).order_by(Post.timestamp.desc()).limit(50).all()
         flash("Explore posts to build your personalized feed!", "info")
     else:
-        # Fetch posts that have a score in ANY of the user's top interested categories,
+        # Fetch posts that have a score in ANY of the user's top interested categories (from text)
+        # OR have an image classified with ANY of those categories,
         # EXCLUDING the user's own posts.
-        # We use distinct() to avoid duplicate posts if a post matches multiple categories.
-        posts_query = db.session.query(Post).distinct() \
-            .join(PostCategoryScore, Post.id == PostCategoryScore.post_id) \
-            .filter(PostCategoryScore.category.in_(interested_categories)) \
-            .filter(Post.user_id != current_user.id) # Exclude user's own posts
+        # We use distinct() to avoid duplicate posts.
 
+        # Base query for posts not authored by the current user
+        base_query = db.session.query(Post).filter(Post.user_id != current_user.id)
+
+        # --- Conditions for matching posts ---
+
+        # 1. Match based on text classification scores
+        text_match_condition = Post.id.in_(
+            db.session.query(PostCategoryScore.post_id)
+            .filter(PostCategoryScore.category.in_(interested_categories))
+        )
+
+        # 2. Match based on image classification (using LIKE for broader compatibility)
+        #    This creates a list of LIKE conditions, one for each category.
+        #    Example: Post.image_classification.like('%"Travel":%')
+        image_match_conditions = [
+            Post.image_classification.like(f'%"{category}":%')
+            for category in interested_categories
+        ]
+        # Combine image conditions with OR
+        image_match_condition = or_(*image_match_conditions)
+
+        # --- Combine conditions ---
+        # We want posts that satisfy EITHER text OR image matching criteria
+        combined_condition = or_(text_match_condition, image_match_condition)
+
+        # Apply the combined condition to the base query
+        posts_query = base_query.filter(combined_condition)
+
+
+        # --- Fetch and supplement ---
+        # Order by timestamp and limit results
         posts = posts_query.order_by(Post.timestamp.desc()).limit(50).all()
 
 
