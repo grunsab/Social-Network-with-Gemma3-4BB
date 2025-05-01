@@ -1,37 +1,44 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block title %}
     {% if feed_type == "Personalized" %}
         My Feed
     {% else %}
-        Home Feed
+        Home - All Posts
     {% endif %}
 {% endblock %}
 
 {% block content %}
-    <h1>
+<div class="row justify-content-center">
+    <div class="col-md-8">
         {% if feed_type == "Personalized" %}
-            Your Personalized Feed
+            <h1 class="mb-4">My Personalized Feed</h1>
         {% else %}
-            Recent Posts
+            <h1 class="mb-4">Recent Posts</h1>
         {% endif %}
-    </h1>
-    {% if posts %}
-        {% for post in posts %}
-            <div class="post">
-                <p class="post-meta">
-                    Posted by <a href="{{ url_for('profile', username=post.author.username) }}">{{ post.author.username }}</a> on {{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}
-                    {% if post.category %}
-                        | <span class="post-category">{{ post.category }}</span>
-                    {% endif %}
-                </p>
-                <p>{{ post.content }}</p>
+
+        {% if posts %}
+            {% for post in posts %}
+                <div class="card post-card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                           <a href="{{ url_for('profile', username=post.author.username) }}" class="text-decoration-none">@{{ post.author.username }}</a>
+                        </h5>
+                        <p class="card-text">{{ post.content }}</p>
+                        <p class="card-text">
+                            <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                            {% if post.category %}
+                                <span class="badge bg-secondary float-end">{{ post.category }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info" role="alert">
+                No posts yet. {% if feed_type == "Personalized" %} Try exploring the global feed or creating posts! {% endif %}
             </div>
-        {% endfor %}
-    {% else %}
-        <p>No posts yet. {% if feed_type != "Personalized" %}<a href="{{ url_for('create_post') }}">Create one!</a>{% endif %}</p>
-        {% if feed_type == "Personalized" %}
-             <p>Create some posts or interact with content to personalize your feed.</p>
         {% endif %}
-    {% endif %}
+    </div>
+</div>
 {% endblock %} 

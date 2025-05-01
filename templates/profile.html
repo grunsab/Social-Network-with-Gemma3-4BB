@@ -1,35 +1,55 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block title %}{{ user.username }}'s Profile{% endblock %}
 
 {% block content %}
-    <h1>{{ user.username }}'s Profile</h1>
+<div class="profile-header text-center mb-4">
+    <h1 class="display-5">@{{ user.username }}</h1>
+    {# Add more profile details here later if needed, e.g., bio, join date #}
+</div>
 
-    <h2>Interests (Based on Posts)</h2>
-    {% if interests %}
-        <ul class="user-interests">
-            {% for interest in interests %}
-                <li>{{ interest.category }} ({{ interest.score }})</li>
+<div class="row">
+    {# User Posts Column #}
+    <div class="col-md-8">
+        <h2 class="mb-3">Posts</h2>
+        {% if posts %}
+            {% for post in posts %}
+                <div class="card post-card shadow-sm">
+                    <div class="card-body">
+                         {# No need to link author name on their own profile #}
+                        <p class="card-text">{{ post.content }}</p>
+                        <p class="card-text">
+                            <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                            {% if post.category %}
+                                <span class="badge bg-secondary float-end">{{ post.category }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
             {% endfor %}
-        </ul>
-    {% else %}
-        <p>No interests recorded yet. Create posts to build your interest profile!</p>
-    {% endif %}
+        {% else %}
+            <p>{{ user.username }} hasn't posted anything yet.</p>
+        {% endif %}
+    </div>
 
-    <h2>{{ user.username }}'s Posts</h2>
-    {% if posts %}
-        {% for post in posts %}
-            <div class="post">
-                <p class="post-meta">
-                    Posted on {{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}
-                    {% if post.category %}
-                         | <span class="post-category">{{ post.category }}</span>
-                    {% endif %}
-                </p>
-                <p>{{ post.content }}</p>
+    {# User Interests Column #}
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title h5 mb-3">Interests</h2>
+                {% if interests %}
+                    <ul class="list-unstyled">
+                        {% for interest in interests %}
+                            <li class="mb-2">
+                                <span class="badge rounded-pill bg-info text-dark">{{ interest.category }} ({{ interest.score }})</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No interests recorded yet.</p>
+                {% endif %}
             </div>
-        {% endfor %}
-    {% else %}
-        <p>{{ user.username }} hasn't posted anything yet.</p>
-    {% endif %}
+        </div>
+    </div>
+</div>
 {% endblock %} 

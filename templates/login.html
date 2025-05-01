@@ -1,19 +1,32 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block title %}Login{% endblock %}
 
 {% block content %}
-    <h1>Login</h1>
-    <form method="post">
-        <div>
+<div class="form-signin text-center">
+    <form method="POST" action="{{ url_for('login') }}">
+        <h1 class="h3 mb-3 fw-normal">Please sign in</h1>
+
+        <div class="form-floating mb-3">
+            <input type="text" class="form-control" id="username" name="username" placeholder="Username" required autofocus>
             <label for="username">Username</label>
-            <input type="text" id="username" name="username" required>
         </div>
-        <div>
+        <div class="form-floating mb-3">
+            <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
             <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
         </div>
-        <button type="submit">Login</button>
+
+        {# Simple Remember Me - Flask-Login handles this #}
+        {# <div class="checkbox mb-3">
+            <label>
+                <input type="checkbox" value="remember-me"> Remember me
+            </label>
+        </div> #}
+        <button class="w-100 btn btn-lg btn-primary" type="submit">Sign in</button>
+        <p class="mt-3 mb-1">
+            Don't have an account? <a href="{{ url_for('register') }}">Register here</a>
+        </p>
+        <p class="mt-5 mb-3 text-muted">&copy; SocialNet <span id="current-year"></span></p>
     </form>
-    <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
+</div>
 {% endblock %} 
