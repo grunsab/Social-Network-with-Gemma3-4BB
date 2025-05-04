@@ -332,6 +332,16 @@ def create_post():
                 # Decide if this is an error or just means no image intended
                 # return render_template('create_post.html') # Optional: uncomment if filename must exist
             else:
+                # Check file size - limit to 10MB
+                image_file.seek(0, os.SEEK_END)
+                file_size = image_file.tell()
+                image_file.seek(0)  # Reset file pointer to beginning
+                
+                # 10MB = 10 * 1024 * 1024 bytes
+                if file_size > 10 * 1024 * 1024:  
+                    flash('Image file is too large. Maximum size is 10MB.', 'warning')
+                    return render_template('create_post.html')
+                
                 # Secure filename and generate unique key
                 # filename = secure_filename(image_file.filename) # Consider using secure_filename if needed
                 # Generate unique name to avoid collisions
