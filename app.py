@@ -42,6 +42,7 @@ S3_SECRET = os.environ.get("S3_SECRET_ACCESS_KEY")
 S3_REGION = os.environ.get("S3_REGION", "auto") # Default region if not set
 S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
 DOMAIN_NAME_IMAGES = os.environ.get("DOMAIN_NAME_IMAGES")
+DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 s3_client = None
 if S3_BUCKET and S3_KEY and S3_SECRET:
@@ -501,6 +502,8 @@ def delete_post(post_id):
         return redirect(url_for('index')) # Or perhaps back to the referring page
 
     try:
+        # Delete associated category score entries to avoid FK constraint violation
+        PostCategoryScore.query.filter_by(post_id=post_to_delete.id).delete(synchronize_session=False)
         db.session.delete(post_to_delete)
         db.session.commit()
         flash('Post deleted successfully.', 'success')
@@ -883,4 +886,4 @@ def delete_comment(comment_id):
         return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True) # Enable debug mode for development
+    app.run(debug=DEBUG)

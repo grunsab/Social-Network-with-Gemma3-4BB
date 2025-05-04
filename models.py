@@ -149,6 +149,7 @@ class Post(db.Model):
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
     classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
     comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
+    category_scores = db.relationship('PostCategoryScore', backref='post', lazy=True, cascade='all, delete-orphan')
     privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
 
     def __repr__(self):
@@ -184,7 +185,7 @@ class Comment(db.Model):
 
 class PostCategoryScore(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id', ondelete='CASCADE'), nullable=False)
     category = db.Column(db.String(50), nullable=False)
     score = db.Column(db.Float, default=0.0)
 
