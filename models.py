@@ -28,6 +28,16 @@ class Post(db.Model):
     def __repr__(self):
         return f'<Post {self.content[:50]}...>'
 
+class PostUserCategoryScore(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    score = db.Column(db.Float, default=0.0)
+
+    def __repr__(self):
+        return f'<PostUserCategoryScore {self.id} - Post: {self.post_id} - User: {self.user_id} - Category: {self.category} - Score: {self.score}>'
+
 class UserInterest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

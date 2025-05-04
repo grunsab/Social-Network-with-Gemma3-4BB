@@ -54,6 +54,97 @@ login_manager.init_app(app)
 login_manager.login_view = 'login' # Redirect to login page if user is not logged in
 migrate.init_app(app, db)
 
+
+class GemmaClassification:
+    def __init__(self):
+        self.categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
+                "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
+                "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature", 
+                "Other"]
+        self.model = "google/gemma-3-4b-it"
+        self.max_tokens = 1024
+        self.response_format = {"type": "json_object"}
+        self.messages = [{"role": "user", "content": self.prompt}]
+        self.response_content = None
+        self.category_scores = {}
+        self.prompt = f"""Classify the subject matter of the following information into relevant categories from the list below.
+            Provide a relevance score between 0.0 and 1.0 for each category you assign (higher means more relevant).
+            Return the results as a JSON object where keys are category names and values are their scores.
+            Only include categories with a score > 0.1.
+            If no category seems relevant or confidence is low, return an empty JSON object {{}}.
+            Categories: {", ".join(self.categories)}
+            JSON Output:"""
+
+
+    def default_classify_function(self, messages):
+        self.messages.extend(messages)
+        try:
+            chat_completion = openai.chat.completions.create(
+                model=self.model,
+                messages=self.messages
+                response_format=self.response_format,
+                max_tokens=self.max_tokens
+            )
+            self.response_content = chat_completion.choices[0].message.content.strip()
+            print(f"DEBUG: Gemma response: {self.response_content}")
+
+            # Parse the JSON response
+            self.category_scores = json.loads(self.response_content)
+
+            # Basic validation
+            if not isinstance(self.category_scores, dict):
+                print("ERROR: Classification result is not a dictionary.")
+                return None
+            
+            validated_scores = {}
+            for category, score in self.category_scores.items():
+                if category in self.categories and isinstance(score, (int, float)) and 0.0 <= score <= 1.0:
+                    validated_scores[category] = float(score)
+                else:
+                    print(f"WARN: Invalid category '{category}' or score '{score}' received, skipping.")
+
+            if not validated_scores:
+                print("INFO: No relevant categories found or low confidence.")
+        except Exception as e:
+            print(f"ERROR: An error occurred during classification: {e}")
+            return None
+        return validated_scores
+
+    def classify_text(self, post_content):
+        """
+        Classifies post content into multiple categories with scores using Gemma.
+        Returns a dictionary of {category: score} or None if classification fails.
+        """
+        print(f"INFO: Classifying post: {post_content[:50]}...")
+        return self.default_classify_function([{"type": "text", "text": self.post_content}])
+
+                
+    def classify_image(self, image_data):
+        """
+        Classifies image data into categories with scores using the configured Gemma multimodal endpoint.
+        Input: image_data (bytes)
+        Returns: Dictionary of {category: score} or None if classification fails.
+        """
+        print(f"INFO: Classifying image of size {len(image_data)} bytes...")
+        if not image_data:
+            print("ERROR: No image data provided for classification.")
+            return None
+        # Encode the image data to base64
+        base64_image = base64.b64encode(image_data).decode('utf-8')
+
+        # Define the prompt for image classification into categories
+        messages = [{
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{base64_image}"
+            }
+            }]
+        return self.default_classify_function(self.messages)
+
+
+gemma_classification = GemmaClassification()
+
+'''
 def classify_post_with_gemma(post_content):
     """
     Classifies post content into multiple categories with scores using Gemma.
@@ -205,6 +296,10 @@ JSON Output:"""
         print(f"ERROR: An error occurred during image classification: {e}")
         return None
 
+'''
+
+
+
 # --- Models (Defined in models.py, imported here) ---
 # We will define models in a separate file later.
 # For now, let's assume User and Post models exist.
@@ -349,15 +444,15 @@ def create_post():
                     s3_client.upload_fileobj(
                         image_file,
                         S3_BUCKET,
-                        unique_filename
-                        # ExtraArgs={'ACL': 'public-read'} # Optional: if you want images to be publicly accessible directly
+                        unique_filename,
+                        ExtraArgs={'ACL': 'public-read'}
                     )
                     # Construct the S3 URL (adjust based on your bucket/region/settings)
                     image_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{unique_filename}"
                     print(f"INFO: Image uploaded to {image_url}")
 
-                    # Classify the image (using placeholder)
-                    image_classification_result = classify_image_with_gemma(image_data)
+                    # Classify the image
+                    image_classification_result = gemma_classification.classify_image(image_data)
                     if image_classification_result:
                          print(f"INFO: Image classified: {image_classification_result}")
                     else:
@@ -376,7 +471,7 @@ def create_post():
         # --- Handle Text Content and Classification ---
         category_scores = None
         if content:
-            category_scores = classify_post_with_gemma(content)
+            category_scores = gemma_classification.classify_text(content)
             if category_scores is None:
                 flash('There was an error classifying your post text. Please try again.', 'danger')
                 # Decide if text classification failure should prevent post creation
