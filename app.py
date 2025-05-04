@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -171,7 +171,7 @@ gemma_classification = GemmaClassification()
 # --- Models (Defined in models.py, imported here) ---
 # We will define models in a separate file later.
 # For now, let's assume User and Post models exist.
-from models import User, Post, UserInterest, InviteCode, PostCategoryScore
+from models import User, Post, UserInterest, InviteCode, PostCategoryScore, Comment
 
 # --- User Loader for Flask-Login ---
 @login_manager.user_loader
@@ -556,6 +556,82 @@ def personalized_feed():
     # Render the feed
     return render_template('index.html', posts=posts, feed_type="Personalized (by Category)")
 
+# --- Comment Routes ---
+@app.route('/post/<int:post_id>/comments', methods=['GET'])
+@login_required
+def get_comments(post_id):
+    post = Post.query.get_or_404(post_id)
+    comments = Comment.query.filter_by(post_id=post_id).order_by(Comment.timestamp).all()
+    
+    comments_data = []
+    for comment in comments:
+        author = User.query.get(comment.user_id)
+        comments_data.append({
+            'id': comment.id,
+            'content': comment.content,
+            'author': author.username,
+            'timestamp': comment.timestamp.strftime('%Y-%m-%d %H:%M'),
+            'is_author': author.id == current_user.id
+        })
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # For AJAX requests
+        return jsonify(comments_data)
+    else:
+        # For regular page requests
+        return render_template('comments.html', comments=comments, post=post)
+
+@app.route('/post/<int:post_id>/comment', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    post = Post.query.get_or_404(post_id)
+    content = request.form.get('content')
+    
+    if not content:
+        flash('Comment cannot be empty', 'warning')
+        return redirect(url_for('index'))
+    
+    new_comment = Comment(
+        content=content,
+        user_id=current_user.id,
+        post_id=post_id
+    )
+    
+    db.session.add(new_comment)
+    db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # For AJAX requests
+        return jsonify({
+            'id': new_comment.id,
+            'content': new_comment.content,
+            'author': current_user.username,
+            'timestamp': new_comment.timestamp.strftime('%Y-%m-%d %H:%M'),
+            'is_author': True
+        })
+    else:
+        # For regular form submissions
+        return redirect(url_for('index'))
+
+@app.route('/comment/<int:comment_id>/delete', methods=['POST'])
+@login_required
+def delete_comment(comment_id):
+    comment = Comment.query.get_or_404(comment_id)
+    
+    # Ensure only the author can delete their comment
+    if comment.user_id != current_user.id:
+        flash('You do not have permission to delete this comment', 'danger')
+        return redirect(url_for('index'))
+    
+    db.session.delete(comment)
+    db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # For AJAX requests
+        return jsonify({'success': True})
+    else:
+        # For regular form submissions
+        return redirect(url_for('index'))
 
 if __name__ == '__main__':
     # Remove the db.create_all() call

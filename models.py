@@ -9,6 +9,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     posts = db.relationship('Post', backref='author', lazy=True)
+    comments = db.relationship('Comment', backref='author', lazy=True)
     interests = db.relationship('UserInterest', backref='user', lazy=True)
     invites_left = db.Column(db.Integer, default=3, nullable=False) # Max 3 invites per user initially
     issued_codes = db.relationship('InviteCode', backref='issuer', lazy=True, foreign_keys='InviteCode.issuer_id')
@@ -24,9 +25,20 @@ class Post(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
     classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
+    comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Post {self.content[:50]}...>'
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Comment {self.content[:30]}...>'
 
 class PostCategoryScore(db.Model):
     id = db.Column(db.Integer, primary_key=True)

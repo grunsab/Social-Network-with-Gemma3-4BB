@@ -53,12 +53,42 @@
                                 </span>
                             {% endif %}
                         </p>
-                        {# Add Delete Button/Form if the post belongs to the current user #}
-                        {% if post.author == current_user %}
-                            <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
-                                <button type="submit" class="btn btn-danger btn-sm float-end ms-2">Delete</button>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary comments-toggle" data-post-id="{{ post.id }}">
+                                    Comments <span class="comment-count">{% if post.comments|length > 0 %}({{ post.comments|length }}){% endif %}</span>
+                                </button>
+                                <a href="{{ url_for('get_comments', post_id=post.id) }}" class="btn btn-sm btn-link">View All</a>
+                            </div>
+                            
+                            {# Add Delete Button/Form if the post belongs to the current user #}
+                            {% if post.author == current_user %}
+                                <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Comments section (hidden by default) -->
+                        <div class="comments-section mt-3 border-top pt-3" id="comments-section-{{ post.id }}" style="display: none;">
+                            <div class="comments-container" id="comments-container-{{ post.id }}">
+                                <!-- Comments will be loaded here by AJAX -->
+                                <div class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Comment form -->
+                            <form class="comment-form mt-3" data-post-id="{{ post.id }}">
+                                <div class="input-group">
+                                    <input type="text" class="form-control comment-input" placeholder="Add a comment...">
+                                    <button class="btn btn-primary" type="submit">Post</button>
+                                </div>
                             </form>
-                        {% endif %}
+                        </div>
                     </div>
                 </div>
             {% endfor %}
@@ -73,6 +103,7 @@
 {# Add script to render markdown after the loop #}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
+    // Render markdown for post content
     const postContents = document.querySelectorAll('.post-content');
     postContents.forEach(div => {
       const rawContent = div.getAttribute('data-raw-content');
@@ -85,6 +116,184 @@
         div.innerHTML = marked.parse(rawContent);
       }
     });
+    
+    // Handle comments toggle
+    const commentToggles = document.querySelectorAll('.comments-toggle');
+    commentToggles.forEach(button => {
+      button.addEventListener('click', function() {
+        const postId = this.getAttribute('data-post-id');
+        const commentsSection = document.getElementById(`comments-section-${postId}`);
+        const commentsContainer = document.getElementById(`comments-container-${postId}`);
+        
+        if (commentsSection.style.display === 'none') {
+          commentsSection.style.display = 'block';
+          // Load comments via AJAX
+          fetch(`/post/${postId}/comments`, {
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          })
+          .then(response => response.json())
+          .then(comments => {
+            let commentsHtml = '';
+            
+            if (comments.length === 0) {
+              commentsHtml = '<div class="alert alert-info">No comments yet. Be the first to comment!</div>';
+            } else {
+              commentsHtml = '<div class="list-group">';
+              comments.forEach(comment => {
+                commentsHtml += `
+                  <div class="list-group-item list-group-item-action flex-column align-items-start comment-item" id="comment-${comment.id}">
+                    <div class="d-flex w-100 justify-content-between">
+                      <h6 class="mb-1">@${comment.author}</h6>
+                      <small>${comment.timestamp}</small>
+                    </div>
+                    <p class="mb-1">${comment.content}</p>
+                    ${comment.is_author ? 
+                      `<div class="text-end mt-1">
+                        <button class="btn btn-sm btn-danger delete-comment" data-comment-id="${comment.id}">Delete</button>
+                       </div>` : ''}
+                  </div>
+                `;
+              });
+              commentsHtml += '</div>';
+            }
+            
+            commentsContainer.innerHTML = commentsHtml;
+            
+            // Add event listeners for delete buttons
+            document.querySelectorAll('.delete-comment').forEach(button => {
+              button.addEventListener('click', function() {
+                const commentId = this.getAttribute('data-comment-id');
+                if (confirm('Are you sure you want to delete this comment?')) {
+                  deleteComment(commentId);
+                }
+              });
+            });
+          })
+          .catch(error => {
+            console.error('Error loading comments:', error);
+            commentsContainer.innerHTML = '<div class="alert alert-danger">Error loading comments</div>';
+          });
+        } else {
+          commentsSection.style.display = 'none';
+        }
+      });
+    });
+    
+    // Handle comment form submission
+    const commentForms = document.querySelectorAll('.comment-form');
+    commentForms.forEach(form => {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const postId = this.getAttribute('data-post-id');
+        const input = this.querySelector('.comment-input');
+        const content = input.value.trim();
+        
+        if (content) {
+          addComment(postId, content, this);
+          input.value = '';
+        }
+      });
+    });
+    
+    // Add comment function
+    function addComment(postId, content, form) {
+      const commentsContainer = document.getElementById(`comments-container-${postId}`);
+      const commentCount = document.querySelector(`.comments-toggle[data-post-id="${postId}"] .comment-count`);
+      
+      fetch(`/post/${postId}/comment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: `content=${encodeURIComponent(content)}`
+      })
+      .then(response => response.json())
+      .then(comment => {
+        // Remove "no comments" message if it exists
+        const noCommentsMsg = commentsContainer.querySelector('.alert-info');
+        if (noCommentsMsg) {
+          noCommentsMsg.remove();
+          commentsContainer.innerHTML = '<div class="list-group"></div>';
+        }
+        
+        // If there's no list-group div, create one
+        if (!commentsContainer.querySelector('.list-group')) {
+          commentsContainer.innerHTML = '<div class="list-group"></div>';
+        }
+        
+        // Add the new comment
+        const listGroup = commentsContainer.querySelector('.list-group');
+        const commentElement = document.createElement('div');
+        commentElement.className = 'list-group-item list-group-item-action flex-column align-items-start comment-item';
+        commentElement.id = `comment-${comment.id}`;
+        commentElement.innerHTML = `
+          <div class="d-flex w-100 justify-content-between">
+            <h6 class="mb-1">@${comment.author}</h6>
+            <small>${comment.timestamp}</small>
+          </div>
+          <p class="mb-1">${comment.content}</p>
+          <div class="text-end mt-1">
+            <button class="btn btn-sm btn-danger delete-comment" data-comment-id="${comment.id}">Delete</button>
+          </div>
+        `;
+        listGroup.appendChild(commentElement);
+        
+        // Update comment count
+        const count = document.querySelectorAll(`#comments-container-${postId} .comment-item`).length;
+        if (count > 0) {
+          commentCount.textContent = `(${count})`;
+        }
+        
+        // Add delete event listener
+        commentElement.querySelector('.delete-comment').addEventListener('click', function() {
+          const commentId = this.getAttribute('data-comment-id');
+          if (confirm('Are you sure you want to delete this comment?')) {
+            deleteComment(commentId);
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Error adding comment:', error);
+        alert('Error adding comment. Please try again.');
+      });
+    }
+    
+    // Delete comment function
+    function deleteComment(commentId) {
+      fetch(`/comment/${commentId}/delete`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          const commentElement = document.getElementById(`comment-${commentId}`);
+          const postId = commentElement.closest('.comments-section').id.replace('comments-section-', '');
+          commentElement.remove();
+          
+          // Update comment count
+          const commentCount = document.querySelector(`.comments-toggle[data-post-id="${postId}"] .comment-count`);
+          const count = document.querySelectorAll(`#comments-container-${postId} .comment-item`).length;
+          if (count > 0) {
+            commentCount.textContent = `(${count})`;
+          } else {
+            commentCount.textContent = '';
+            // Show "no comments" message
+            const commentsContainer = document.getElementById(`comments-container-${postId}`);
+            commentsContainer.innerHTML = '<div class="alert alert-info">No comments yet. Be the first to comment!</div>';
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error deleting comment:', error);
+        alert('Error deleting comment. Please try again.');
+      });
+    }
   });
 </script>
 
