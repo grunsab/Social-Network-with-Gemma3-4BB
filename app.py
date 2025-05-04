@@ -64,7 +64,6 @@ class GemmaClassification:
         self.model = "google/gemma-3-4b-it"
         self.max_tokens = 1024
         self.response_format = {"type": "json_object"}
-        self.messages = [{"role": "user", "content": self.prompt}]
         self.response_content = None
         self.category_scores = {}
         self.prompt = f"""Classify the subject matter of the following information into relevant categories from the list below.
@@ -77,23 +76,28 @@ class GemmaClassification:
 
 
     def default_classify_function(self, messages):
-        self.messages.extend(messages)
         try:
             chat_completion = openai.chat.completions.create(
                 model=self.model,
-                messages=self.messages
+                messages=messages,
                 response_format=self.response_format,
                 max_tokens=self.max_tokens
             )
+            
             self.response_content = chat_completion.choices[0].message.content.strip()
             print(f"DEBUG: Gemma response: {self.response_content}")
 
-            # Parse the JSON response
-            self.category_scores = json.loads(self.response_content)
+            # Handle potentially malformed JSON
+            try:
+                self.category_scores = json.loads(self.response_content)
+            except json.JSONDecodeError as je:
+                print(f"ERROR: Failed to parse JSON response: {je}")
+                print(f"Raw response: {self.response_content}")
+                return None
 
             # Basic validation
             if not isinstance(self.category_scores, dict):
-                print("ERROR: Classification result is not a dictionary.")
+                print(f"ERROR: Classification result is not a dictionary: {type(self.category_scores)}")
                 return None
             
             validated_scores = {}
@@ -103,207 +107,71 @@ class GemmaClassification:
                 else:
                     print(f"WARN: Invalid category '{category}' or score '{score}' received, skipping.")
 
-            if not validated_scores:
-                print("INFO: No relevant categories found or low confidence.")
+            return validated_scores or {}  # Return empty dict if no valid categories found
+            
         except Exception as e:
             print(f"ERROR: An error occurred during classification: {e}")
-            return None
-        return validated_scores
+            return {}  # Return empty dict on error to avoid None-related issues
 
     def classify_text(self, post_content):
         """
         Classifies post content into multiple categories with scores using Gemma.
-        Returns a dictionary of {category: score} or None if classification fails.
+        Returns a dictionary of {category: score} or empty dict if classification fails.
         """
-        print(f"INFO: Classifying post: {post_content[:50]}...")
-        return self.default_classify_function([{"type": "text", "text": self.post_content}])
+        if not post_content or not post_content.strip():
+            print("INFO: Empty post content provided, skipping classification.")
+            return {}
+            
+        print(f"INFO: Classifying text post: {post_content[:50]}...")
+        
+        # Clear and specific structured messages
+        messages = [
+            {"role": "system", "content": "You are a classifier that categorizes content and returns results only as a valid JSON object."},
+            {"role": "user", "content": f"{self.prompt}\n\nContent to classify: {post_content}"}
+        ]
+
+        return self.default_classify_function(messages)
 
                 
     def classify_image(self, image_data):
         """
         Classifies image data into categories with scores using the configured Gemma multimodal endpoint.
         Input: image_data (bytes)
-        Returns: Dictionary of {category: score} or None if classification fails.
+        Returns: Dictionary of {category: score} or empty dict if classification fails.
         """
-        print(f"INFO: Classifying image of size {len(image_data)} bytes...")
         if not image_data:
             print("ERROR: No image data provided for classification.")
-            return None
-        # Encode the image data to base64
-        base64_image = base64.b64encode(image_data).decode('utf-8')
-
-        # Define the prompt for image classification into categories
-        messages = [{
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{base64_image}"
-            }
-            }]
-        return self.default_classify_function(self.messages)
+            return {}
+            
+        print(f"INFO: Classifying image of size {len(image_data)} bytes...")
+        
+        try:
+            # Encode the image data to base64
+            base64_image = base64.b64encode(image_data).decode('utf-8')
+            
+            # Format messages for multimodal API (DeepInfra's expected format)
+            messages = [
+                {"role": "system", "content": "You are a classifier that analyzes images and returns results only as a valid JSON object."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": self.prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                ]}
+            ]
+            
+            return self.default_classify_function(messages)
+            
+        except Exception as e:
+            print(f"ERROR: Image classification failed: {e}")
+            return {}
 
 
 gemma_classification = GemmaClassification()
-
-'''
-def classify_post_with_gemma(post_content):
-    """
-    Classifies post content into multiple categories with scores using Gemma.
-    Returns a dictionary of {category: score} or None if classification fails.
-    """
-    print(f"INFO: Classifying post: {post_content[:50]}...")
-    categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
-                  "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
-                   "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature", "Other"]
-    prompt = f"""Classify the following post content into relevant categories from the list below.
-    Provide a relevance score between 0.0 and 1.0 for each category you assign (higher means more relevant).
-    Return the results as a JSON object where keys are category names and values are their scores.
-    Only include categories with a score > 0.1.
-    If no category seems relevant or confidence is low, return an empty JSON object {{}}.
-    Categories: {", ".join(categories)}
-    Post Content: {post_content}
-    JSON Output:"""
-
-    try:
-        chat_completion = openai.chat.completions.create(
-            model="google/gemma-3-4b-it", # Or another suitable model
-            messages=[
-                # System prompt can be simpler if instructions are in user prompt
-                {"role": "system", "content": "You are an assistant that classifies posts into categories and provides relevance scores as a JSON object."}, 
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"} # Request JSON output if model supports it
-        )
-
-        response_content = chat_completion.choices[0].message.content.strip()
-        print(f"DEBUG: Gemma response: {response_content}")
-
-        # Parse the JSON response
-        category_scores = json.loads(response_content)
-
-        # Basic validation (ensure it's a dict and scores are numbers)
-        if not isinstance(category_scores, dict):
-            print("ERROR: Classification result is not a dictionary.")
-            return None
-        
-        validated_scores = {}
-        for category, score in category_scores.items():
-            if category in categories and isinstance(score, (int, float)) and 0.0 <= score <= 1.0:
-                 validated_scores[category] = float(score)
-            else:
-                print(f"WARN: Invalid category '{category}' or score '{score}' received, skipping.")
-
-        if not validated_scores:
-            print("INFO: No relevant categories found or low confidence.")
-            # Optionally assign 'Other' if needed, or return None/empty dict
-            # return {"Other": 0.1}
-            return {}
-
-        return validated_scores
-
-    except json.JSONDecodeError as e:
-        print(f"ERROR: Failed to decode JSON response from classification model: {e}")
-        # It's likely response_content exists if JSON decoding failed, but check just in case.
-        logged_response = locals().get('response_content', 'Response content unavailable')
-        print(f"Response was: {logged_response}")
-        return None
-    except Exception as e:
-        print(f"ERROR: An error occurred during post classification: {e}")
-        return None
-
-def classify_image_with_gemma(image_data):
-    """
-    Classifies image data into categories with scores using the configured Gemma multimodal endpoint.
-    Input: image_data (bytes)
-    Returns: Dictionary of {category: score} or None if classification fails.
-    """
-    print(f"INFO: Classifying image of size {len(image_data)} bytes...")
-    if not image_data:
-        print("ERROR: No image data provided for classification.")
-        return None
-
-    # Reuse the same categories as text classification
-    categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
-                  "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
-                   "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature", "Other"]
-
-    try:
-        # Encode the image data to base64
-        base64_image = base64.b64encode(image_data).decode('utf-8')
-
-        # Define the prompt for image classification into categories
-        image_prompt = f"""Classify the subject matter of the following image into relevant categories from the list below.
-Provide a relevance score between 0.0 and 1.0 for each category you assign (higher means more relevant).
-Return the results as a JSON object where keys are category names and values are their scores.
-Only include categories with a score > 0.1.
-If no category seems relevant or confidence is low, return an empty JSON object {{}}.
-Categories: {", ".join(categories)}
-JSON Output:"""
-
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": image_prompt
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
-                    }
-                ]
-            }
-        ]
-
-        chat_completion = openai.chat.completions.create(
-            model="google/gemma-3-4b-it", # Ensure this model supports image input and JSON output
-            messages=messages,
-            response_format={"type": "json_object"}, # Request JSON output
-            max_tokens=1024 # Increase tokens slightly for potential JSON list
-        )
-
-        response_content = chat_completion.choices[0].message.content.strip()
-        print(f"DEBUG: Gemma image classification JSON response: {response_content}")
-
-        # Parse and validate the JSON response
-        category_scores = json.loads(response_content)
-
-        if not isinstance(category_scores, dict):
-            print("ERROR: Image classification result is not a dictionary.")
-            return None
-
-        validated_scores = {}
-        for category, score in category_scores.items():
-            if category in categories and isinstance(score, (int, float)) and 0.0 <= score <= 1.0:
-                 validated_scores[category] = float(score)
-            else:
-                print(f"WARN: Invalid category '{category}' or score '{score}' received from image classification, skipping.")
-
-        if not validated_scores:
-            print("INFO: No relevant categories found for image or low confidence.")
-            return {}
-
-        return validated_scores
-
-    except json.JSONDecodeError as e:
-        print(f"ERROR: Failed to decode JSON response from image classification model: {e}")
-        logged_response = locals().get('response_content', 'Response content unavailable')
-        print(f"Response was: {logged_response}")
-        return None
-    except Exception as e:
-        print(f"ERROR: An error occurred during image classification: {e}")
-        return None
-
-'''
-
 
 
 # --- Models (Defined in models.py, imported here) ---
 # We will define models in a separate file later.
 # For now, let's assume User and Post models exist.
-from models import User, Post, UserInterest, InviteCode
+from models import User, Post, UserInterest, InviteCode, PostCategoryScore
 
 # --- User Loader for Flask-Login ---
 @login_manager.user_loader
@@ -445,7 +313,6 @@ def create_post():
                         image_file,
                         S3_BUCKET,
                         unique_filename,
-                        ExtraArgs={'ACL': 'public-read'}
                     )
                     # Construct the S3 URL (adjust based on your bucket/region/settings)
                     image_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{unique_filename}"
@@ -491,6 +358,7 @@ def create_post():
 
             flash_messages = []
             combined_classifications = {} # Initialize dictionary for combined scores
+                            
 
             # --- Process Text Classification Scores ---
             if content:
@@ -498,6 +366,7 @@ def create_post():
                     flash_categories = []
                     for category, score in category_scores.items():
                         combined_classifications[category] = score # Add text score
+
                         flash_categories.append(f"{category} ({score:.2f})")
 
                         # Update UserInterest for text categories
@@ -546,6 +415,15 @@ def create_post():
             # --- Save Combined Classifications (JSON) ---
             new_post.classification_scores = combined_classifications # Assign the combined dict
 
+
+            for category, score in combined_classifications.items():
+                # Check if the category already exists for the user
+                post_category_score = PostCategoryScore(
+                    post_id=new_post.id,
+                    category=category,
+                    score=score)
+                db.session.add(post_category_score)
+            
             # Combine flash messages
             if flash_messages:
                 flash(' '.join(flash_messages), 'success')
@@ -653,27 +531,15 @@ def personalized_feed():
         posts = Post.query.filter(Post.user_id != current_user.id).order_by(Post.timestamp.desc()).limit(50).all()
         flash("Explore posts to build your personalized feed!", "info")
     else:
-        # Fetch posts (excluding user's own) that have an image classified
-        # with ANY of the user's top interested categories.
-
         # Base query for posts not authored by the current user
         base_query = Post.query.filter(Post.user_id != current_user.id)
-
-        # Match based on image classification JSON (using LIKE)
-        image_match_conditions = [
-            Post.classification_scores.like(f'%"{category}":%')
-            for category in interested_categories
-        ]
-        # Combine image conditions with OR
-        image_match_condition = or_(*image_match_conditions)
-
-        # Apply the image category condition to the base query
-        # Also ensure classification_scores is not NULL
-        posts_query = base_query.filter(Post.classification_scores.isnot(None)).filter(image_match_condition)
+        posts_query = (base_query.filter(Post.id == PostCategoryScore.post_id).
+            filter(or_(*[PostCategoryScore.category == category for category in interested_categories])).
+            order_by(PostCategoryScore.score.desc()))
 
         # --- Fetch, Order, and Supplement ---
         # Order matched posts by their timestamp (descending), as the float score is gone
-        posts = posts_query.order_by(Post.timestamp.desc()).limit(50).all()
+        posts = posts_query.limit(50).all()
 
         # Optional: Add recent posts if the feed is too small (similar to previous logic)
         if len(posts) < 10:
@@ -695,4 +561,4 @@ if __name__ == '__main__':
     # Remove the db.create_all() call
     # with app.app_context():
     #     db.create_all() # Create database tables if they don't exist
-    app.run(debug=True) # Enable debug mode for development 
+    app.run(debug=True) # Enable debug mode for development
