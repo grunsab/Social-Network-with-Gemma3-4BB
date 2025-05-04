@@ -10,7 +10,7 @@ The application learns user interests based on the categories of their posts and
 *   View a feed of all posts
 *   View a personalized feed based on learned interests
 *   View user profiles with their posts and inferred interests
-*   Placeholder post classification (simulating Gemma)
+*   post classification
 
 ## Setup
 
