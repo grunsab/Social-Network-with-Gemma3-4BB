@@ -307,7 +307,7 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route('/create_post', methods=['GET', 'POST'])
+@app.route('/post', methods=['GET', 'POST'])
 @login_required
 def create_post():
     if request.method == 'POST':
@@ -492,7 +492,7 @@ def create_post():
     # GET request
     return render_template('create_post.html')
 
-@app.route('/post/<int:post_id>/delete', methods=['POST'])
+@app.route('/post/<int:post_id>', methods=['DELETE', 'POST'])
 @login_required
 def delete_post(post_id):
     post_to_delete = Post.query.get_or_404(post_id)
