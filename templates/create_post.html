@@ -15,6 +15,21 @@
                 <label for="image" class="form-label">Upload Image (Optional)</label>
                 <input class="form-control" type="file" id="image" name="image" accept="image/*">
             </div>
+            <div class="mb-3">
+                <label class="form-label">Privacy</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="privacy" id="privacy_public" value="PUBLIC" checked>
+                    <label class="form-check-label" for="privacy_public">
+                        <i class="bi bi-globe"></i> Public - Anyone can see this post
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="privacy" id="privacy_friends" value="FRIENDS">
+                    <label class="form-check-label" for="privacy_friends">
+                        <i class="bi bi-people"></i> Friends Only - Only your friends can see this post
+                    </label>
+                </div>
+            </div>
             <button type="submit" class="btn btn-primary">Post</button>
         </form>
     </div>

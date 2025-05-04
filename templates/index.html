@@ -23,6 +23,14 @@
                     <div class="card-body">
                         <h5 class="card-title">
                            <a href="{{ url_for('profile', username=post.author.username) }}" class="text-decoration-none">@{{ post.author.username }}</a>
+                           {% if post.privacy.name == 'FRIENDS' %}
+                               <span class="badge bg-info ms-2"><i class="bi bi-people-fill"></i> Friends Only</span>
+                           {% else %}
+                               <span class="badge bg-secondary ms-2"><i class="bi bi-globe"></i> Public</span>
+                           {% endif %}
+                           
+                           {# Debug privacy value - remove after fixing #}
+                           <small class="d-none">Privacy Debug: {{ post.privacy }} / {{ post.privacy.value }}</small>
                         </h5>
                         
                         {# Display Image if it exists #}

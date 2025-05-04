@@ -719,7 +719,7 @@ def personalized_feed():
             Post.user_id != current_user.id,
             Post.privacy == PostPrivacy.PUBLIC,
             or_(*[PostCategoryScore.category == category for category in interested_categories])
-        )
+        ).order_by(PostCategoryScore.score.desc())
         
         friends_base_query = db.session.query(Post).join(
             FriendRequest, 
@@ -735,10 +735,10 @@ def personalized_feed():
             Post.privacy == PostPrivacy.FRIENDS,
             Post.user_id != current_user.id,
             or_(*[PostCategoryScore.category == category for category in interested_categories])
-        )
+        ).order_by(PostCategoryScore.score.desc())
         
         # Combine both queries
-        posts_query = public_base_query.union(friends_base_query).order_by(Post.timestamp.desc())
+        posts_query = public_base_query.union(friends_base_query)
         posts = posts_query.limit(50).all()
 
         # Optional: Add recent posts if the feed is too small
