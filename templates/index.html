@@ -43,7 +43,7 @@
                         {% endif %}
                         
                         <p class="card-text">
-                            <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                            <small class="text-muted"><span class="local-timestamp" data-timestamp="{{ post.timestamp.isoformat() }}"></span></small>
                             {# Display multiple categories/scores if they exist #}
                             {% if post.category_scores %}
                                 <span class="float-end">
@@ -146,7 +146,7 @@
                   <div class="list-group-item list-group-item-action flex-column align-items-start comment-item" id="comment-${comment.id}">
                     <div class="d-flex w-100 justify-content-between">
                       <h6 class="mb-1">@${comment.author}</h6>
-                      <small>${comment.timestamp}</small>
+                      <small class="text-muted"><span class="local-timestamp" data-timestamp="${comment.timestamp}">Loading...</span></small>
                     </div>
                     <p class="mb-1">${comment.content}</p>
                     ${comment.is_author ? 
@@ -160,6 +160,9 @@
             }
             
             commentsContainer.innerHTML = commentsHtml;
+            
+            // Format timestamps for newly loaded comments
+            formatLocalTimestamps();
             
             // Add event listeners for delete buttons
             document.querySelectorAll('.delete-comment').forEach(button => {
@@ -232,7 +235,7 @@
         commentElement.innerHTML = `
           <div class="d-flex w-100 justify-content-between">
             <h6 class="mb-1">@${comment.author}</h6>
-            <small>${comment.timestamp}</small>
+            <small class="text-muted"><span class="local-timestamp" data-timestamp="${comment.timestamp}">Loading...</span></small>
           </div>
           <p class="mb-1">${comment.content}</p>
           <div class="text-end mt-1">
@@ -240,6 +243,9 @@
           </div>
         `;
         listGroup.appendChild(commentElement);
+        
+        // Format timestamp for the newly added comment
+        formatLocalTimestamps();
         
         // Update comment count
         const count = document.querySelectorAll(`#comments-container-${postId} .comment-item`).length;

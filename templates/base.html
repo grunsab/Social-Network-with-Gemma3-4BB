@@ -118,5 +118,35 @@
         }
     </script>
 
+    {# Add script to format timestamps #}
+    <script>
+        function formatLocalTimestamps() {
+            const timestampElements = document.querySelectorAll('.local-timestamp');
+            timestampElements.forEach(span => {
+                const timestampISO = span.getAttribute('data-timestamp');
+                if (timestampISO) {
+                    try {
+                        // Append 'Z' to indicate UTC
+                        const date = new Date(timestampISO + 'Z'); 
+                        // Use locale string with sensible options for date and time
+                        span.textContent = date.toLocaleString(undefined, { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: 'numeric', 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            // timeZoneName: 'short' // Optional: display timezone abbr.
+                        });
+                    } catch (e) {
+                        console.error("Error parsing timestamp:", timestampISO, e);
+                        span.textContent = "Invalid Date"; // Fallback text
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', formatLocalTimestamps);
+    </script>
+
 </body>
 </html> 

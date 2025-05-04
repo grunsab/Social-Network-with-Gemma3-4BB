@@ -15,7 +15,7 @@
                 <div class="original-post mb-4 p-3 border-bottom">
                     <h6 class="mb-2">
                         <a href="{{ url_for('profile', username=post.author.username) }}" class="text-decoration-none">@{{ post.author.username }}</a>
-                        <small class="text-muted ms-2">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                        <small class="text-muted ms-2"><span class="local-timestamp" data-timestamp="{{ post.timestamp.isoformat() }}"></span></small>
                     </h6>
                     
                     {% if post.image_url %}
@@ -46,7 +46,7 @@
                                 <div class="d-flex justify-content-between">
                                     <h6 class="mb-1">
                                         <a href="{{ url_for('profile', username=comment.author.username) }}" class="text-decoration-none">@{{ comment.author.username }}</a>
-                                        <small class="text-muted ms-2">{{ comment.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                                        <small class="text-muted ms-2"><span class="local-timestamp" data-timestamp="{{ comment.timestamp.isoformat() }}"></span></small>
                                     </h6>
                                     
                                     {% if current_user.id == comment.user_id %}

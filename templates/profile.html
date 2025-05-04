@@ -33,7 +33,7 @@
                         {% endif %}
                         
                         <p class="card-text">
-                            <small class="text-muted">{{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                            <small class="text-muted"><span class="local-timestamp" data-timestamp="{{ post.timestamp.isoformat() }}"></span></small>
                             {# Display multiple categories/scores if they exist #}
                             {% if post.category_scores %}
                                 <span class="float-end">
