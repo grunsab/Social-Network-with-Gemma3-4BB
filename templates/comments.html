@@ -28,7 +28,7 @@
                 </div>
                 
                 <!-- Comment form -->
-                <form action="{{ url_for('add_comment', post_id=post.id) }}" method="POST" class="mb-4">
+                <form action="{{ url_for('comments', post_id=post.id) }}" method="POST" class="mb-4">
                     <div class="form-group mb-3">
                         <label for="content">Add a comment</label>
                         <textarea class="form-control" id="content" name="content" rows="3" required></textarea>

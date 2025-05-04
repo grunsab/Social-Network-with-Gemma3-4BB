@@ -59,7 +59,7 @@
                                 <button class="btn btn-sm btn-outline-primary comments-toggle" data-post-id="{{ post.id }}">
                                     Comments <span class="comment-count">{% if post.comments|length > 0 %}({{ post.comments|length }}){% endif %}</span>
                                 </button>
-                                <a href="{{ url_for('get_comments', post_id=post.id) }}" class="btn btn-sm btn-link">View All</a>
+                                <a href="{{ url_for('comments', post_id=post.id) }}" class="btn btn-sm btn-link">View All</a>
                             </div>
                             
                             {# Add Delete Button/Form if the post belongs to the current user #}
@@ -202,7 +202,7 @@
       const commentsContainer = document.getElementById(`comments-container-${postId}`);
       const commentCount = document.querySelector(`.comments-toggle[data-post-id="${postId}"] .comment-count`);
       
-      fetch(`/post/${postId}/comment`, {
+      fetch(`/post/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
