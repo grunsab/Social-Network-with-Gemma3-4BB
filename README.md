@@ -1,6 +1,6 @@
 # Simple Social Network with Post Classification
 
-This is a basic Flask-based social network application where user posts are classified into categories using a placeholder function (intended to be replaced by a Gemma model).
+This is a basic Flask-based social network application where user posts are classified into categories using the Gemma3 model.
 The application learns user interests based on the categories of their posts and provides a personalized feed.
 
 ## Features
