@@ -802,7 +802,7 @@ def personalized_feed():
             posts.extend(recent_friends_posts)
 
     # We no longer need to sort in Python - it's handled by the SQL query
-    return render_template('index.html', posts=posts, feed_type="Personalized (by SQL Category Score)")
+    return render_template('index.html', posts=posts, feed_type="Personalized")
 
 # --- Comment Routes ---
 @app.route('/post/<int:post_id>/comments', methods=['GET', 'POST'])
@@ -880,7 +880,4 @@ def delete_comment(comment_id):
         return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    # Remove the db.create_all() call
-    # with app.app_context():
-    #     db.create_all() # Create database tables if they don't exist
     app.run(debug=True) # Enable debug mode for development
