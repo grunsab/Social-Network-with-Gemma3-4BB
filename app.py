@@ -210,7 +210,7 @@ def index():
     own_posts_query = Post.query.filter_by(user_id=current_user.id)
     
     # Union all queries and order by timestamp
-    posts = public_posts_query.union(friends_only_posts_query, own_posts_query).order_by(Post.timestamp.desc()).all()
+    posts = public_posts_query.union_all(friends_only_posts_query, own_posts_query).order_by(Post.timestamp.desc()).all()
     
     return render_template('index.html', posts=posts)
 
@@ -707,7 +707,7 @@ def personalized_feed():
             Post.user_id != current_user.id
         ).order_by(Post.timestamp.desc())
         
-        posts = public_posts.union(friends_posts).order_by(Post.timestamp.desc()).limit(50).all()
+        posts = public_posts.union_all(friends_posts).order_by(Post.timestamp.desc()).limit(50).all()
         flash("Explore posts to build your personalized feed!", "info")
     else:
         # Base query for posts not authored by the current user
@@ -738,7 +738,7 @@ def personalized_feed():
         )
         
         # Combine both queries
-        posts_query = public_base_query.union(friends_base_query).order_by(Post.timestamp.desc())
+        posts_query = public_base_query.union_all(friends_base_query).order_by(Post.timestamp.desc())
         posts = posts_query.limit(50).all()
 
         # Optional: Add recent posts if the feed is too small
