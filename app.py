@@ -34,21 +34,24 @@ def method_override():
         if method in ['PUT', 'DELETE', 'PATCH']:
             request.environ['REQUEST_METHOD'] = method  # Override the actual HTTP method
 
-# --- AWS S3 Configuration ---
+# --- AWS S3 Configuration: Now using Cloudflare R2 ---
 # Best practice: Load from environment variables
 S3_BUCKET = os.environ.get("S3_BUCKET", "socialnetworkgemma")
 S3_KEY = os.environ.get("S3_KEY")
 S3_SECRET = os.environ.get("S3_SECRET_ACCESS_KEY")
-S3_REGION = os.environ.get("S3_REGION", "us-west-2") # Default region if not set
+S3_REGION = os.environ.get("S3_REGION", "auto") # Default region if not set
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
+DOMAIN_NAME_IMAGES = os.environ.get("DOMAIN_NAME_IMAGES")
 
 s3_client = None
 if S3_BUCKET and S3_KEY and S3_SECRET:
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id=S3_KEY,
-        aws_secret_access_key=S3_SECRET,
-        region_name=S3_REGION
+    s3_client = boto3.client('s3',
+        endpoint_url = S3_ENDPOINT_URL,
+        aws_access_key_id = S3_KEY,
+        aws_secret_access_key = S3_SECRET,
+        region_name = S3_REGION,
     )
+    
     print(f"INFO: S3 Client initialized for bucket {S3_BUCKET} in region {S3_REGION}")
 else:
     print("WARN: S3 credentials not found in environment variables. Image upload will be disabled.")
@@ -346,7 +349,7 @@ def create_post():
                         unique_filename,
                     )
                     # Construct the S3 URL (adjust based on your bucket/region/settings)
-                    image_url = f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{unique_filename}"
+                    image_url = f"{DOMAIN_NAME_IMAGES}/{unique_filename}"
                     print(f"INFO: Image uploaded to {image_url}")
 
                     # Classify the image
