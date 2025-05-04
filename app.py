@@ -770,6 +770,12 @@ def personalized_feed():
             posts.extend(recent_friends_posts)
 
     # Render the feed
+    # Sort posts by relevance to user interests
+    user_interest_map = {interest.category: interest.score for interest in user_interests}
+    def compute_relevance(post):
+        post_scores = post.classification_scores or {}
+        return sum(user_interest_map.get(cat, 0) * score for cat, score in post_scores.items())
+    posts.sort(key=compute_relevance, reverse=True)
     return render_template('index.html', posts=posts, feed_type="Personalized (by Category)")
 
 # --- Comment Routes ---
