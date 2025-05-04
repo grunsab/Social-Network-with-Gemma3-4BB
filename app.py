@@ -389,20 +389,20 @@ def create_post():
                 content=content,
                 user_id=current_user.id,
                 image_url=image_url,
-                image_classification=image_classification_result # Store results (can be None)
+                classification_scores={} # Initialize as empty dict, will be populated below
             )
             db.session.add(new_post)
-            db.session.flush() # Get new_post.id for category scores
+            db.session.flush() # Get new_post.id if needed elsewhere, post object is available
 
             flash_messages = []
-            combined_score = 0.0 # Initialize combined score
+            combined_classifications = {} # Initialize dictionary for combined scores
 
             # --- Process Text Classification Scores ---
             if content:
                 if category_scores: # Only process text scores if classification was successful
                     flash_categories = []
                     for category, score in category_scores.items():
-                        combined_score += score # Add text score to combined score
+                        combined_classifications[category] = score # Add text score
                         flash_categories.append(f"{category} ({score:.2f})")
 
                         # Update UserInterest for text categories
@@ -425,12 +425,13 @@ def create_post():
 
             # --- Process Image Classification Scores ---
             if image_url: # Only process if an image was successfully uploaded
-                if image_classification_result:
+                if image_classification_result: # Check if image classification succeeded
                     flash_img_categories = []
                     for category, score in image_classification_result.items():
-                        # Note: We don't have a separate table for image scores on posts,
-                        # but we *do* update UserInterest based on them.
-                        combined_score += score # Add image score to combined score
+                        if category in combined_classifications: # Category exists from text? Average the score
+                            combined_classifications[category] = (combined_classifications[category] + score) / 2.0
+                        else: # New category from image
+                            combined_classifications[category] = score
                         flash_img_categories.append(f"{category} ({score:.2f})")
 
                         # Update UserInterest for image categories
@@ -444,12 +445,11 @@ def create_post():
                          flash_messages.append(f'Image classified: {", ".join(flash_img_categories)}')
                     else:
                          flash_messages.append('Image added, but no specific categories identified.')
-
                 else:
                      flash_messages.append('Image added (classification failed or skipped).')
 
-            # --- Save Combined Score ---
-            new_post.score = combined_score # Assign the calculated combined score to the post
+            # --- Save Combined Classifications (JSON) ---
+            new_post.classification_scores = combined_classifications # Assign the combined dict
 
             # Combine flash messages
             if flash_messages:
@@ -549,24 +549,51 @@ def manage_invites():
 @app.route('/feed')
 @login_required
 def personalized_feed():
-    # Get top user interests (categories) based on score - Keep this for potential future use or display
+    # Get top user interests (categories) based on score
     user_interests = UserInterest.query.filter_by(user_id=current_user.id).order_by(UserInterest.score.desc()).limit(5).all()
     interested_categories = [interest.category for interest in user_interests]
 
-    # Fetch posts ordered by the combined score, excluding the user's own posts.
-    posts = Post.query.filter(Post.user_id != current_user.id)\
-                       .order_by(Post.score.desc())\
-                       .limit(50)\
-                       .all()
+    if not interested_categories:
+        # If no interests, show recent posts (excluding user's own), ordered by timestamp
+        posts = Post.query.filter(Post.user_id != current_user.id).order_by(Post.timestamp.desc()).limit(50).all()
+        flash("Explore posts to build your personalized feed!", "info")
+    else:
+        # Fetch posts (excluding user's own) that have an image classified
+        # with ANY of the user's top interested categories.
 
-    if not posts:
-        # If no posts found (e.g., only user's own posts exist or DB is empty)
-        flash("No posts found for your feed yet.", "info")
-        # Optionally, show recent posts as a fallback, similar to the old 'no interests' logic
-        # posts = Post.query.filter(Post.user_id != current_user.id).order_by(Post.timestamp.desc()).limit(50).all()
+        # Base query for posts not authored by the current user
+        base_query = Post.query.filter(Post.user_id != current_user.id)
 
-    # The template likely still uses 'posts', so we just pass the score-ordered list.
-    return render_template('index.html', posts=posts, feed_type="Personalized (by Score)")
+        # Match based on image classification JSON (using LIKE)
+        image_match_conditions = [
+            Post.classification_scores.like(f'%"{category}":%')
+            for category in interested_categories
+        ]
+        # Combine image conditions with OR
+        image_match_condition = or_(*image_match_conditions)
+
+        # Apply the image category condition to the base query
+        # Also ensure classification_scores is not NULL
+        posts_query = base_query.filter(Post.classification_scores.isnot(None)).filter(image_match_condition)
+
+        # --- Fetch, Order, and Supplement ---
+        # Order matched posts by their timestamp (descending), as the float score is gone
+        posts = posts_query.order_by(Post.timestamp.desc()).limit(50).all()
+
+        # Optional: Add recent posts if the feed is too small (similar to previous logic)
+        if len(posts) < 10:
+             # Get some recent posts to supplement, excluding ones already fetched and user's own
+             existing_post_ids = [p.id for p in posts]
+             recent_posts = Post.query.filter(Post.user_id != current_user.id) \
+                                      .filter(Post.id.notin_(existing_post_ids)) \
+                                      .order_by(Post.timestamp.desc()) \
+                                      .limit(10) \
+                                      .all()
+             posts.extend(recent_posts)
+             # Re-sort combined list by score or timestamp if desired, though extending is often fine.
+
+    # Render the feed
+    return render_template('index.html', posts=posts, feed_type="Personalized (by Category)")
 
 
 if __name__ == '__main__':

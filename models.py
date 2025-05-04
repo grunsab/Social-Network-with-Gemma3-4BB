@@ -23,8 +23,7 @@ class Post(db.Model):
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
-    image_classification = db.Column(db.JSON, nullable=True) # Store classification results as JSON
-    score = db.Column(db.Float, nullable=True, default=0.0, index=True) # Added combined score field
+    classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
 
     def __repr__(self):
         return f'<Post {self.content[:50]}...>'
