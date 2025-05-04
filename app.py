@@ -9,7 +9,7 @@ import json # Add json import
 import boto3 # Add boto3 import
 import uuid # Add uuid import
 import base64 # Add base64 import
-from sqlalchemy import or_ # Import 'or_' operator
+from sqlalchemy import or_, func, case, desc # Import 'or_' operator, func for SQL functions, case for conditional expressions, and desc for ordering
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
 
@@ -710,18 +710,39 @@ def personalized_feed():
         posts = public_posts.union_all(friends_posts).order_by(Post.timestamp.desc()).limit(50).all()
         flash("Explore posts to build your personalized feed!", "info")
     else:
-        # Base query for posts not authored by the current user
-        # But respect privacy settings
-        public_base_query = Post.query.join(
+        # Create subquery of user interests with categories and scores
+        user_interest_subq = db.session.query(
+            UserInterest.category,
+            UserInterest.score
+        ).filter(
+            UserInterest.user_id == current_user.id,
+            UserInterest.category.in_(interested_categories)
+        ).subquery()
+        
+        # Base query for public posts - now with calculated relevance
+        public_base_query = db.session.query(
+            Post,
+            func.sum(
+                PostCategoryScore.score * user_interest_subq.c.score
+            ).label('relevance_score')
+        ).join(
             PostCategoryScore,
             Post.id == PostCategoryScore.post_id
+        ).join(
+            user_interest_subq,
+            PostCategoryScore.category == user_interest_subq.c.category
         ).filter(
             Post.user_id != current_user.id,
-            Post.privacy == PostPrivacy.PUBLIC,
-            or_(*[PostCategoryScore.category == category for category in interested_categories])
-        )
+            Post.privacy == PostPrivacy.PUBLIC
+        ).group_by(Post.id)
         
-        friends_base_query = db.session.query(Post).join(
+        # Base query for friends' posts - with relevance calculation
+        friends_base_query = db.session.query(
+            Post,
+            func.sum(
+                PostCategoryScore.score * user_interest_subq.c.score
+            ).label('relevance_score')
+        ).join(
             FriendRequest, 
             (
                 ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) | 
@@ -730,18 +751,29 @@ def personalized_feed():
         ).join(
             PostCategoryScore,
             Post.id == PostCategoryScore.post_id
+        ).join(
+            user_interest_subq,
+            PostCategoryScore.category == user_interest_subq.c.category
         ).filter(
             FriendRequest.status == FriendRequestStatus.ACCEPTED,
             Post.privacy == PostPrivacy.FRIENDS,
-            Post.user_id != current_user.id,
-            or_(*[PostCategoryScore.category == category for category in interested_categories])
-        )
+            Post.user_id != current_user.id
+        ).group_by(Post.id)
         
-        # Combine both queries
-        posts_query = public_base_query.union_all(friends_base_query).order_by(Post.timestamp.desc())
-        posts = posts_query.limit(50).all()
-
-        # Optional: Add recent posts if the feed is too small
+        # Union queries preserving relevance_score using full select statements
+        # (we can't use simple union_all here because we need to preserve relevance_score)
+        combined_query = public_base_query.union_all(friends_base_query)
+        
+        # Order by relevance score (descending) then by timestamp
+        posts_with_scores = combined_query.order_by(
+            desc('relevance_score'),
+            Post.timestamp.desc()
+        ).limit(50).all()
+        
+        # Extract just the Post objects from the result tuples
+        posts = [post_tuple[0] for post_tuple in posts_with_scores]
+        
+        # If we don't have enough posts, add some recent ones
         if len(posts) < 10:
             existing_post_ids = [p.id for p in posts]
             
@@ -769,14 +801,8 @@ def personalized_feed():
             posts.extend(recent_public_posts)
             posts.extend(recent_friends_posts)
 
-    # Render the feed
-    # Sort posts by relevance to user interests
-    user_interest_map = {interest.category: interest.score for interest in user_interests}
-    def compute_relevance(post):
-        post_scores = post.classification_scores or {}
-        return sum(user_interest_map.get(cat, 0) * score for cat, score in post_scores.items())
-    posts.sort(key=compute_relevance, reverse=True)
-    return render_template('index.html', posts=posts, feed_type="Personalized (by Category)")
+    # We no longer need to sort in Python - it's handled by the SQL query
+    return render_template('index.html', posts=posts, feed_type="Personalized (by SQL Category Score)")
 
 # --- Comment Routes ---
 @app.route('/post/<int:post_id>/comments', methods=['GET', 'POST'])
