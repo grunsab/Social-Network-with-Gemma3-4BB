@@ -22,9 +22,9 @@ class Post(db.Model):
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    category_scores = db.relationship('PostCategoryScore', backref='post', lazy=True, cascade="all, delete-orphan")
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
     image_classification = db.Column(db.JSON, nullable=True) # Store classification results as JSON
+    score = db.Column(db.Float, nullable=True, default=0.0, index=True) # Added combined score field
 
     def __repr__(self):
         return f'<Post {self.content[:50]}...>'
@@ -40,19 +40,6 @@ class UserInterest(db.Model):
 
     def __repr__(self):
         return f'<UserInterest User: {self.user_id} Category: {self.category} Score: {self.score}>'
-
-# NEW Model for Post Category Scores
-class PostCategoryScore(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
-    category = db.Column(db.String(50), nullable=False, index=True)
-    score = db.Column(db.Float, nullable=False)
-
-    # Ensure a post has only one score per category
-    __table_args__ = (db.UniqueConstraint('post_id', 'category', name='uq_post_category_score'),)
-
-    def __repr__(self):
-        return f'<PostCategoryScore Post: {self.post_id} Cat: {self.category} Score: {self.score}>'
 
 # New InviteCode model
 class InviteCode(db.Model):
