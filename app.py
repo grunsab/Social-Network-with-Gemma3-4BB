@@ -73,8 +73,8 @@ class GemmaClassification:
     def __init__(self):
         self.categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
                 "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
-                "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature", 
-                "Other"]
+                "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature",  "Nature", 
+                "Animals", "Weather", "Space", "Astrology", "Physics", "Chemistry", "Biology", "Animated", "Video Games", "Comics", "Drawings", "Other"]
         self.model = MODEL_NAME
         self.max_tokens = 1024
         self.response_format = {"type": "json_object"}
