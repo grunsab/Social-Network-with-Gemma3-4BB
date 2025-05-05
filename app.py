@@ -43,6 +43,7 @@ S3_REGION = os.environ.get("S3_REGION", "auto") # Default region if not set
 S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
 DOMAIN_NAME_IMAGES = os.environ.get("DOMAIN_NAME_IMAGES")
 DEBUG = os.environ.get("DEBUG", "False") == "True"
+MODEL_NAME = os.environ.get("MODEL_NAME", "google/gemma-3-4b-it")
 
 s3_client = None
 if S3_BUCKET and S3_KEY and S3_SECRET:
@@ -74,7 +75,7 @@ class GemmaClassification:
                 "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
                 "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature", 
                 "Other"]
-        self.model = "google/gemma-3-4b-it"
+        self.model = MODEL_NAME
         self.max_tokens = 1024
         self.response_format = {"type": "json_object"}
         self.response_content = None
