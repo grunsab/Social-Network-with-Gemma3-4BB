@@ -173,31 +173,34 @@ function Profile() {
         </div>
       </div>
 
-      {/* Interests Section */}
-      <div className="profile-section profile-interests"> 
-        <h3>Interests</h3>
-        {interests.length > 0 ? (
-          <ul>
-            {interests.map(interest => (
-              <li key={interest.category}>{interest.category} (Score: {interest.score.toFixed(2)})</li>
-            ))}
-          </ul>
-        ) : (
-          <p>No interests recorded yet.</p>
-        )}
-      </div>
+      {/* NEW: Wrapper for Interests and Posts */}
+      <div className="profile-main-content">
+        {/* Interests Section (will be sidebar) */}
+        <div className="profile-section profile-interests">
+          <h3>Interests</h3>
+          {interests.length > 0 ? (
+            <ul>
+              {interests.map(interest => (
+                <li key={interest.category}>{interest.category} (Score: {interest.score.toFixed(2)})</li>
+              ))}
+            </ul>
+          ) : (
+            <p>No interests recorded yet.</p>
+          )}
+        </div>
 
-      {/* Posts Section */}
-      <div className="profile-section profile-posts"> 
-        <h3>Posts</h3>
-        {posts.length === 0 ? (
-          <p>No posts to display.</p>
-        ) : (
-          posts.map(post => (
-            <Post key={post.id} post={post} onDelete={handlePostDeleted} />
-          ))
-        )}
-      </div>
+        {/* Posts Section (will be main area) */}
+        <div className="profile-section profile-posts">
+          <h3>Posts</h3>
+          {posts.length === 0 ? (
+            <p>No posts to display.</p>
+          ) : (
+            posts.map(post => (
+              <Post key={post.id} post={post} onDelete={handlePostDeleted} />
+            ))
+          )}
+        </div>
+      </div> {/* End of profile-main-content */}
     </div>
   );
 }

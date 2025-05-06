@@ -112,4 +112,36 @@
     /* box-shadow: none; */
     /* border: 1px solid var(--border-color-light); */ 
     /* Add border if needed for separation */
+}
+
+/* New styles for two-column layout */
+.profile-main-content {
+    display: flex;
+    flex-direction: row; /* Explicitly set to row */
+    gap: 1.5rem; /* Space between sidebar and main content */
+    /* flex-wrap: wrap; */ /* Temporarily removed to enforce side-by-side */
+}
+
+.profile-main-content .profile-interests {
+    flex: 0 0 280px; /* Sidebar width, don't grow, don't shrink */
+    /* margin-bottom will be handled by gap in parent, or can be kept if needed */
+}
+
+.profile-main-content .profile-posts {
+    flex-grow: 1; /* Main content takes remaining space */
+    min-width: 300px; /* Prevent content from becoming too narrow */
+    /* margin-bottom will be handled by gap in parent, or can be kept if needed */
+}
+
+/* Responsive adjustments if needed */
+@media (max-width: 768px) { /* Example breakpoint */
+    .profile-main-content {
+        flex-direction: column;
+    }
+
+    .profile-main-content .profile-interests {
+        flex-basis: auto; /* Reset basis for column layout */
+        width: 100%;
+        margin-bottom: 1.5rem; /* Add margin back for stacked layout */
+    }
 } 
