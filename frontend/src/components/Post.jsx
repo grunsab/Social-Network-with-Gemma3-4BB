@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext'; // To check if current user is author for delete button
 import { Link } from 'react-router-dom'; // Import Link
 import './Post.css'; // Import the CSS file
 import Spinner from './Spinner'; // Import Spinner
-import { FaTrashAlt, FaRegCommentDots } from 'react-icons/fa'; // Import Trash and Comment icons
+import { FaTrashAlt, FaRegCommentDots, FaPlay } from 'react-icons/fa'; // Import Trash, Comment icons, and Play icon
 import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
+import { useAmpersoundAutocomplete } from '../hooks/useAmpersoundAutocomplete'; // Import the hook
 
 // Basic styling for the component -- REMOVED
 // const postStyle = { ... };
@@ -20,6 +21,88 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   const [showComments, setShowComments] = useState(false);
   const [newCommentContent, setNewCommentContent] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+
+  const commentTextareaRef = useRef(null); // Ref for comment textarea
+
+  // Use autocomplete hook for comment input
+  const {
+    suggestions: commentSuggestions,
+    showSuggestions: showCommentSuggestions,
+    loadingSuggestions: loadingCommentSuggestions,
+    suggestionsRef: commentSuggestionsRef,
+    handleContentChange: hookHandleCommentChange, 
+    handleSuggestionClick: hookHandleCommentSuggestionClick,
+    hideSuggestions: hideCommentSuggestions
+  } = useAmpersoundAutocomplete(commentTextareaRef);
+
+  // State for comment preview playback
+  const [commentPreviewAudio, setCommentPreviewAudio] = useState(null);
+  const [isCommentPreviewLoading, setIsCommentPreviewLoading] = useState(false);
+  const [commentPreviewError, setCommentPreviewError] = useState('');
+
+  // Cleanup preview audio on unmount
+  useEffect(() => {
+    return () => {
+        if (commentPreviewAudio) {
+            commentPreviewAudio.pause();
+        }
+    };
+  }, [commentPreviewAudio]);
+
+  // Wrap hook's content change handler
+  const handleLocalCommentChange = (event) => {
+    hookHandleCommentChange(event, setNewCommentContent);
+    // Stop preview if user types
+    if (commentPreviewAudio) commentPreviewAudio.pause();
+    setCommentPreviewAudio(null);
+  };
+
+  // Wrap hook's suggestion click handler
+  const handleLocalCommentSuggestionClick = (tag) => {
+    hookHandleCommentSuggestionClick(tag, newCommentContent, setNewCommentContent);
+    // Stop preview if suggestion is clicked
+    if (commentPreviewAudio) commentPreviewAudio.pause();
+    setCommentPreviewAudio(null);
+  };
+
+  // Function to handle previewing a sound from comment suggestions
+  const handlePreviewCommentSound = async (event, soundUrl) => {
+    event.stopPropagation(); // Prevent suggestion click from firing
+    setCommentPreviewError('');
+    
+    if (commentPreviewAudio) { 
+        commentPreviewAudio.pause();
+        setCommentPreviewAudio(null);
+    }
+
+    if (!soundUrl) {
+        setCommentPreviewError('No preview available.');
+        return;
+    }
+
+    setIsCommentPreviewLoading(true);
+    try {
+        const audio = new Audio(soundUrl);
+        setCommentPreviewAudio(audio);
+
+        await audio.play(); 
+        console.log("Comment Preview playing...");
+
+        audio.onended = () => setCommentPreviewAudio(null);
+        audio.onerror = (e) => {
+            console.error("Comment Audio preview error:", e);
+            setCommentPreviewError('Error loading preview audio.'); 
+            setCommentPreviewAudio(null);
+        };
+
+    } catch (err) {
+        console.error("Error creating or playing comment preview audio:", err);
+        setCommentPreviewError(`Could not play preview: ${err.message}`);
+        setCommentPreviewAudio(null);
+    } finally {
+        setIsCommentPreviewLoading(false);
+    }
+  };
 
   if (!post) return null; // Don't render if no post data
 
@@ -79,6 +162,10 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
 
   const handlePostComment = async (event) => {
       event.preventDefault();
+      hideCommentSuggestions(); // Hide suggestions
+      // Stop preview on submit
+      if (commentPreviewAudio) commentPreviewAudio.pause();
+      setCommentPreviewAudio(null);
       if (!newCommentContent.trim()) return;
       setPostingComment(true);
       setErrorComments(''); // Clear previous comment errors
@@ -86,9 +173,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
       try {
           const response = await fetch(`/api/v1/posts/${post.id}/comments`, {
               method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ content: newCommentContent })
           });
           if (!response.ok) {
@@ -216,19 +301,59 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
             {!loadingComments && comments.length === 0 && !errorComments && <p>No comments yet.</p>} 
 
             {/* Add Comment Form */}
-            {/* Apply comment-form class */} 
             <form onSubmit={handlePostComment} className="comment-form"> 
-              <textarea 
-                value={newCommentContent}
-                onChange={(e) => setNewCommentContent(e.target.value)}
-                placeholder="Add a comment..."
-                rows="2"
-                required
-              />
+              {commentPreviewError && <p className="error-message">Preview Error: {commentPreviewError}</p>} {/* Show preview error */}
+              <div style={{ position: 'relative' }}> {/* Wrapper for suggestions */}
+                <textarea 
+                  ref={commentTextareaRef} // Attach ref
+                  value={newCommentContent}
+                  onChange={handleLocalCommentChange} // Use wrapped handler
+                  placeholder="Add a comment..."
+                  rows="2"
+                  required
+                  onBlur={hideCommentSuggestions} // Hide on blur
+                />
+                {/* Comment Suggestions Dropdown */} 
+                {showCommentSuggestions && commentSuggestions.length > 0 && (
+                  <ul 
+                      ref={commentSuggestionsRef} 
+                      className="ampersound-suggestions" 
+                  >
+                      {loadingCommentSuggestions && <li className="suggestion-item-loading">Loading...</li>}
+                      {!loadingCommentSuggestions && commentSuggestions.map((sugg, index) => (
+                          <li 
+                              key={index} 
+                              className="suggestion-item" 
+                          >
+                              {/* Suggestion Info - Now handles insertion click */} 
+                              <div 
+                                  style={{display: 'flex', alignItems: 'center', flexGrow: 1, cursor: 'pointer'}}
+                                  onClick={() => handleLocalCommentSuggestionClick(sugg.tag)}
+                              >
+                                  <span>{sugg.tag}</span>
+                                  <span className="suggestion-item-details">(by @{sugg.owner})</span>
+                              </div>
+                              {/* Preview Button - onClick unchanged */}
+                              {sugg.url && (
+                                  <button 
+                                      type="button" 
+                                      onClick={(e) => { e.stopPropagation(); handlePreviewCommentSound(e, sugg.url); }}
+                                      className="suggestion-preview-button icon-button" 
+                                      title={`Preview ${sugg.tag}`}
+                                      disabled={isCommentPreviewLoading}
+                                      style={{ marginLeft: '10px', padding: '2px 5px'}}
+                                  >
+                                      {isCommentPreviewLoading ? <Spinner inline size="small"/> : <FaPlay size="0.8em"/>}
+                                  </button>
+                              )}
+                          </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
               <button type="submit" disabled={postingComment}>
-                {postingComment ? <Spinner inline={true} /> : 'Comment'} {/* Use inline spinner */} 
+                {postingComment ? <Spinner inline={true} /> : 'Comment'} 
               </button>
-              {/* Show posting error specifically here, use error-message class */} 
               {errorComments && postingComment && <p className="error-message">{errorComments}</p>} 
             </form>
           </div>

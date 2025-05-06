@@ -646,6 +646,84 @@ def create_app(config_name='default'):
             app.logger.error(f"Error deleting ampersound {sound_id} from database: {e}")
             return jsonify({"message": "Failed to delete Ampersound"}), 500
 
+    @app.route('/api/v1/ampersounds/search', methods=['GET'])
+    @login_required 
+    def search_ampersounds():
+        query_term = request.args.get('q', '').strip()
+        limit = request.args.get('limit', 10, type=int)
+
+        if not query_term:
+            return jsonify([]) 
+
+        results = []
+        username_part = None
+        soundname_part = None
+
+        if '.' in query_term:
+            parts = query_term.split('.', 1)
+            username_part = parts[0]
+            soundname_part = parts[1]
+            username_pattern = f"{username_part}%"
+            soundname_pattern = f"{soundname_part}%"
+            ampersounds_query = (
+                Ampersound.query
+                .join(User, User.id == Ampersound.user_id)
+                .filter(
+                    func.lower(User.username).ilike(username_pattern),
+                    func.lower(Ampersound.name).ilike(soundname_pattern)
+                )
+                .options(joinedload(Ampersound.user))
+                .order_by(User.username, Ampersound.name)
+                .limit(limit)
+            )
+        else:
+            soundname_pattern = f"{query_term}%"
+            ampersounds_query = (
+                Ampersound.query
+                .join(User, User.id == Ampersound.user_id)
+                .filter(func.lower(Ampersound.name).ilike(soundname_pattern))
+                .options(joinedload(Ampersound.user))
+                .order_by(Ampersound.name, User.username) 
+                .limit(limit)
+            )
+
+        found_ampersounds = ampersounds_query.all()
+        
+        # Get S3 config for URL generation
+        s3_client = app.config.get('S3_CLIENT')
+        s3_bucket = app.config.get('S3_BUCKET')
+        domain_name_images = app.config.get('DOMAIN_NAME_IMAGES')
+        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+        s3_region = app.config.get('S3_REGION', 'us-east-1')
+
+        for sound in found_ampersounds:
+            tag = f"&{sound.user.username}.{sound.name}"
+            file_url = None # Generate URL
+            if s3_client and s3_bucket:
+                s3_key = sound.file_path
+                try:
+                    if domain_name_images:
+                        file_url = f"{domain_name_images}/{s3_key}"
+                    elif s3_endpoint_url:
+                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                    else:
+                        if s3_region == 'auto':
+                            app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region for AWS S3.")
+                        else:
+                            file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                except Exception as e:
+                    app.logger.error(f"Error generating URL for search result ampersound {sound.id}: {e}")
+
+            results.append({
+                "id": sound.id, # Include ID for potential future use
+                "tag": tag,
+                "owner": sound.user.username,
+                "name": sound.name,
+                "url": file_url # Add the generated URL
+            })
+
+        return jsonify(results)
+
     return app
 
 # Create app instance for Gunicorn/WSGI server

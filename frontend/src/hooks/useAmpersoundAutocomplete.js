@@ -1,0 +1,135 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+
+// Basic debounce function (can be moved to a shared utils file later)
+function debounce(func, wait) {
+  let timeout;
+  const debounced = function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+  // Add a cancel method to the debounced function
+  debounced.cancel = () => {
+    clearTimeout(timeout);
+  };
+  return debounced;
+}
+
+export function useAmpersoundAutocomplete(textareaRef) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const suggestionsRef = useRef(null); // Ref for suggestions container
+
+  // Debounced fetch function
+  const debouncedFetchSuggestions = useCallback(
+    debounce(async (searchTerm) => {
+      if (!searchTerm) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setLoadingSuggestions(false);
+        return;
+      }
+      setLoadingSuggestions(true);
+      try {
+        const response = await fetch(`/api/v1/ampersounds/search?q=${encodeURIComponent(searchTerm)}&limit=5`, {
+             credentials: 'include'
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch suggestions');
+        }
+        const data = await response.json();
+        setSuggestions(data || []);
+        // Only show if results are found and textarea still has focus or contains the pattern
+        // More complex focus management might be needed here, but let's keep it simple for now
+        setShowSuggestions((data || []).length > 0); 
+      } catch (err) {
+        console.error("Error fetching ampersound suggestions:", err);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+          setLoadingSuggestions(false);
+      }
+    }, 300), // 300ms debounce delay
+    [] // Empty dependency array for useCallback
+  );
+
+  const handleContentChange = useCallback((event, currentContentSetter) => {
+    const newValue = event.target.value;
+    currentContentSetter(newValue); // Update the component's state
+
+    const cursorPos = event.target.selectionStart;
+    const textBeforeCursor = newValue.substring(0, cursorPos);
+    const match = textBeforeCursor.match(/&([a-zA-Z0-9_.-]*)$/); 
+
+    if (match) {
+        const searchTerm = match[1]; 
+        debouncedFetchSuggestions(searchTerm);
+    } else {
+        setShowSuggestions(false); 
+        setSuggestions([]);
+        debouncedFetchSuggestions.cancel(); // Cancel pending fetch
+    }
+  }, [debouncedFetchSuggestions]);
+
+  const handleSuggestionClick = useCallback((tag, currentContent, currentContentSetter) => {
+    const cursorPos = textareaRef.current?.selectionStart;
+    if (cursorPos === undefined || cursorPos === null) return;
+
+    const textBeforeCursor = currentContent.substring(0, cursorPos);
+    const lastAmpersandIndex = textBeforeCursor.lastIndexOf('&');
+    if (lastAmpersandIndex === -1) return; 
+
+    const textBeforeTag = currentContent.substring(0, lastAmpersandIndex);
+    const textAfterCursor = currentContent.substring(cursorPos);
+    const newContent = `${textBeforeTag}${tag} ${textAfterCursor}`; 
+
+    currentContentSetter(newContent);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    debouncedFetchSuggestions.cancel(); // Cancel any pending fetch
+
+    setTimeout(() => {
+        const newCursorPos = lastAmpersandIndex + tag.length + 1; 
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [textareaRef, debouncedFetchSuggestions]);
+
+  // Effect for closing suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+        // Close if click is outside the suggestions box AND outside the textarea
+        if (suggestionsRef.current && !suggestionsRef.current.contains(event.target) && 
+            textareaRef.current && !textareaRef.current.contains(event.target)) 
+        {
+            setShowSuggestions(false);
+        }
+    };
+    if (showSuggestions) { // Only add listener when suggestions are shown
+        document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showSuggestions, textareaRef]); // Depend on showSuggestions and the textarea ref
+
+  // Function to manually hide suggestions (e.g., on blur or submit)
+  const hideSuggestions = useCallback(() => {
+      setShowSuggestions(false);
+      debouncedFetchSuggestions.cancel();
+  }, [debouncedFetchSuggestions]);
+
+  return {
+    suggestions,
+    showSuggestions,
+    loadingSuggestions,
+    suggestionsRef, // Pass the ref for the suggestions UL element
+    handleContentChange, // Let the component call this on textarea change
+    handleSuggestionClick, // Let the component call this when a suggestion LI is clicked
+    hideSuggestions // Function to manually hide
+  };
+} 

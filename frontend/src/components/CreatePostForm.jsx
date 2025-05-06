@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext'; // To ensure user is logged in, though ProtectedRoute handles page access
 import Spinner from './Spinner'; // Implied import for Spinner component
+import { useAmpersoundAutocomplete } from '../hooks/useAmpersoundAutocomplete'; // Import the custom hook
+import { FaPlay } from 'react-icons/fa'; // Import play icon for preview
 
 function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post list
   const { currentUser } = useAuth();
@@ -9,6 +11,50 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
   const [privacy, setPrivacy] = useState('PUBLIC'); // Default privacy
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // State for autocomplete removed - now handled by the hook
+  const textareaRef = useRef(null); // Keep ref for the textarea
+
+  // Use the custom hook
+  const {
+    suggestions,
+    showSuggestions,
+    loadingSuggestions,
+    suggestionsRef,
+    handleContentChange: hookHandleContentChange, // Rename to avoid conflict if needed, or use directly
+    handleSuggestionClick: hookHandleSuggestionClick, // Rename
+    hideSuggestions
+  } = useAmpersoundAutocomplete(textareaRef);
+
+  // State for preview playback
+  const [previewAudio, setPreviewAudio] = useState(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+
+  // Cleanup preview audio on unmount
+  useEffect(() => {
+    return () => {
+        if (previewAudio) {
+            previewAudio.pause();
+        }
+    };
+  }, [previewAudio]);
+
+  // Wrap the hook's content change handler to also update local state
+  const handleLocalContentChange = (event) => {
+    hookHandleContentChange(event, setContent); // Pass setter to the hook
+    // Stop preview if user types
+    if (previewAudio) previewAudio.pause();
+    setPreviewAudio(null);
+  };
+
+  // Wrap the hook's suggestion click handler
+  const handleLocalSuggestionClick = (tag) => {
+    hookHandleSuggestionClick(tag, content, setContent); // Pass current content and setter
+    // Stop preview if suggestion is clicked
+    if (previewAudio) previewAudio.pause();
+    setPreviewAudio(null);
+  };
 
   const handleImageChange = (event) => {
     if (event.target.files && event.target.files[0]) {
@@ -28,6 +74,10 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    hideSuggestions(); // Use hook's function to hide suggestions
+    // Stop preview on submit
+    if (previewAudio) previewAudio.pause();
+    setPreviewAudio(null);
     if (!content && !imageFile) {
       setError('Post must contain text or an image.');
       return;
@@ -76,6 +126,47 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
     }
   };
 
+  // Function to handle previewing a sound
+  const handlePreviewSound = async (event, soundUrl) => {
+    event.stopPropagation(); // Prevent suggestion click from firing
+    setPreviewError('');
+    
+    if (previewAudio) { // Stop previous preview if any
+        previewAudio.pause();
+        setPreviewAudio(null);
+    }
+
+    if (!soundUrl) {
+        setPreviewError('No preview available.');
+        return;
+    }
+
+    setIsPreviewLoading(true);
+    try {
+        const audio = new Audio(soundUrl);
+        setPreviewAudio(audio);
+
+        // Wait for audio to be ready to play to avoid race conditions
+        await audio.play(); 
+        // Play started successfully
+        console.log("Preview playing...");
+
+        audio.onended = () => setPreviewAudio(null); // Clear when finished
+        audio.onerror = (e) => {
+            console.error("Audio preview error:", e);
+            setPreviewError('Error loading preview audio.'); 
+            setPreviewAudio(null);
+        };
+
+    } catch (err) {
+        console.error("Error creating or playing preview audio:", err);
+        setPreviewError(`Could not play preview: ${err.message}`);
+        setPreviewAudio(null);
+    } finally {
+        setIsPreviewLoading(false);
+    }
+  };
+
   // Ensure user is logged in to see the form (though page is protected)
   if (!currentUser) return null; 
 
@@ -85,19 +176,57 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
       <h4>Create New Post</h4>
       {/* Display error above the form */}
       {error && <p className="error-message">{error}</p>}
+      {previewError && <p className="error-message">Preview Error: {previewError}</p>} {/* Show preview error */}
       <form onSubmit={handleSubmit}>
-        {/* Remove inline style from div */}
-        <div> 
+        <div style={{ position: 'relative' }}> {/* Container for positioning suggestions */}
           <label htmlFor="post-content">What's on your mind?</label>
           <textarea 
             id="post-content"
+            ref={textareaRef} // Attach ref
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={handleLocalContentChange} // Use wrapped handler
             rows="4" /* Slightly taller */
             placeholder={`What's up, ${currentUser.username}?`}
-            // Remove inline style, inherit global style
-            // style={{ width: '95%' }}
+            onBlur={hideSuggestions} // Hide on blur too
           />
+          {/* Suggestions Dropdown */} 
+          {showSuggestions && suggestions.length > 0 && (
+            <ul 
+                ref={suggestionsRef} 
+                className="ampersound-suggestions" 
+            >
+                {loadingSuggestions && <li className="suggestion-item-loading">Loading...</li>}
+                {!loadingSuggestions && suggestions.map((sugg, index) => (
+                    <li 
+                        key={index} 
+                        className="suggestion-item" 
+                        // onClickCapture removed from li
+                    >
+                        {/* Suggestion Info - Now handles insertion click */} 
+                        <div 
+                            style={{display: 'flex', alignItems: 'center', flexGrow: 1, cursor: 'pointer'}}
+                            onClick={() => handleLocalSuggestionClick(sugg.tag)} // Attach insert click here
+                        >
+                          <span>{sugg.tag}</span> 
+                          <span className="suggestion-item-details">(by @{sugg.owner})</span>
+                        </div>
+                        {/* Preview Button - onClick unchanged, stopPropagation might not be needed but is harmless */}
+                        {sugg.url && (
+                            <button 
+                                type="button" 
+                                onClick={(e) => { e.stopPropagation(); handlePreviewSound(e, sugg.url); }}
+                                className="suggestion-preview-button icon-button" 
+                                title={`Preview ${sugg.tag}`}
+                                disabled={isPreviewLoading}
+                                style={{ marginLeft: '10px', padding: '2px 5px'}}
+                            >
+                                {isPreviewLoading ? <Spinner inline size="small"/> : <FaPlay size="0.8em"/>}
+                            </button>
+                        )}
+                    </li>
+                ))}
+            </ul>
+          )}
         </div>
         {/* Remove inline style from div */}
         <div> 
@@ -109,7 +238,6 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
             accept="image/*"
             onChange={handleImageChange}
             className="d-block mt-small" // Use utility classes
-            // style={{ display: 'block', marginTop: '0.5em' }} 
           />
         </div>
         {/* Use utility classes for layout */}
@@ -121,7 +249,6 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
               value={privacy}
               onChange={(e) => setPrivacy(e.target.value)}
               className="w-auto" // Use class
-              // style={{ width: 'auto' }} 
             >
               <option value="PUBLIC">Public</option>
               <option value="FRIENDS">Friends Only</option>
@@ -132,12 +259,6 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
             {loading ? <Spinner inline={true} /> : 'Create Post'}
           </button>
         </div>
-        {/* Remove error message from here */}
-        {/* {error && <p style={{ color: 'red' }}>{error}</p>} */}
-        {/* Moved submit button */}
-        {/* <button type="submit" disabled={loading}>
-          {loading ? 'Posting...' : 'Create Post'}
-        </button> */}
       </form>
     </div>
   );

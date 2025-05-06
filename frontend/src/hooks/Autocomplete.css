@@ -1,0 +1,108 @@
+/* Styles for the Ampersound Autocomplete dropdown */
+
+.ampersound-suggestions {
+    position: absolute;
+    list-style: none;
+    padding: 5px 0;
+    margin: 5px 0 0 0; /* Add margin top */
+    border: 1px solid var(--border-color-dark);
+    background-color: var(--input-background-dark);
+    border-radius: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 10;
+    width: calc(100% - 2px); /* Match textarea width (approx) */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Styles for light mode if needed */
+@media (prefers-color-scheme: light) {
+    .ampersound-suggestions {
+        border-color: var(--border-color-light);
+        background-color: var(--input-background-light);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+}
+
+.suggestion-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.suggestion-item:hover {
+    background-color: var(--primary-color);
+    color: var(--background-color-dark); /* Ensure text is readable on hover */
+}
+
+/* Make hover details readable too */
+.suggestion-item:hover .suggestion-item-details {
+    color: var(--background-color-dark); 
+    opacity: 0.8;
+}
+
+.suggestion-item-details {
+    font-size: 0.85em;
+    opacity: 0.7;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+/* Styling for the preview button */
+.suggestion-preview-button {
+    padding: 2px 6px;
+    margin-left: 10px;
+    background-color: transparent;
+    border: 1px solid var(--primary-color); /* Match suggestions hover */
+    color: var(--primary-color);
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0; /* Prevent shrinking */
+    opacity: 0.7;
+    transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+
+.suggestion-preview-button:hover {
+    opacity: 1;
+    background-color: rgba(45, 212, 191, 0.1); /* Primary color with alpha */
+}
+
+.suggestion-preview-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.suggestion-preview-button svg {
+    display: block; /* Prevent extra space below icon */
+}
+
+/* Loading state */
+.suggestion-item-loading {
+    padding: 6px 12px;
+    color: var(--text-color-dark);
+    opacity: 0.6;
+    font-style: italic;
+}
+
+@media (prefers-color-scheme: light) {
+    .suggestion-item-loading {
+         color: var(--text-color-light);
+    }
+    .suggestion-item:hover {
+        color: var(--background-color-light);
+    }
+    .suggestion-item:hover .suggestion-item-details {
+        color: var(--background-color-light); 
+    }
+    .suggestion-preview-button {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+    .suggestion-preview-button:hover {
+        background-color: rgba(45, 212, 191, 0.1);
+    }
+} 

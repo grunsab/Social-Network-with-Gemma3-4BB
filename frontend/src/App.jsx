@@ -19,6 +19,7 @@ import ManageInvites from './components/ManageInvites'; // Import ManageInvites
 import FriendRequests from './components/FriendRequests'; // Import FriendRequests
 import PopularAmpersoundsPage from './components/PopularAmpersoundsPage'; // Import new page
 import './App.css';
+import './hooks/Autocomplete.css'; // Import autocomplete styles
 import Spinner from './components/Spinner'; // Import Spinner
 
 function App() {
