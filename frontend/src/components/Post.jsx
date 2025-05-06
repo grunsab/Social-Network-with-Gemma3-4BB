@@ -64,11 +64,23 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   };
 
   // Wrap hook's suggestion click handler
-  const handleLocalCommentSuggestionClick = (tag) => {
-    hookHandleCommentSuggestionClick(tag, newCommentContent, setNewCommentContent);
-    // Stop preview if suggestion is clicked
-    if (commentPreviewAudio) commentPreviewAudio.pause();
-    setCommentPreviewAudio(null);
+  const handleLocalCommentSuggestionClick = (suggestion) => { // Accept the full suggestion object
+    hookHandleCommentSuggestionClick(suggestion.tag, newCommentContent, setNewCommentContent); // Insert the tag
+
+    // Play the selected sound.
+    // handlePreviewCommentSound will take care of stopping any previous preview.
+    if (suggestion.url) {
+      // Create a pseudo-event object as handlePreviewCommentSound expects an event.
+      const pseudoEvent = { stopPropagation: () => {} };
+      handlePreviewCommentSound(pseudoEvent, suggestion.url);
+    } else {
+      // If no URL, stop any current preview.
+      if (commentPreviewAudio) {
+        commentPreviewAudio.pause();
+        setCommentPreviewAudio(null); // Triggers cleanup.
+      }
+    }
+    // The hook's handleSuggestionClick already hides suggestions.
   };
 
   // Function to handle previewing a sound from comment suggestions
@@ -348,7 +360,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
                               {/* Suggestion Info - Now handles insertion click */} 
                               <div 
                                   style={{display: 'flex', alignItems: 'center', flexGrow: 1, cursor: 'pointer'}}
-                                  onClick={() => handleLocalCommentSuggestionClick(sugg.tag)}
+                                  onClick={() => handleLocalCommentSuggestionClick(sugg)} // Pass the full sugg object
                               >
                                   <span>{sugg.tag}</span>
                                   <span className="suggestion-item-details">(by @{sugg.owner})</span>

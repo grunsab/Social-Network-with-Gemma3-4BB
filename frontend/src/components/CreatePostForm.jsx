@@ -55,11 +55,24 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
   };
 
   // Wrap the hook's suggestion click handler
-  const handleLocalSuggestionClick = (tag) => {
-    hookHandleSuggestionClick(tag, content, setContent); // Pass current content and setter
-    // Stop preview if suggestion is clicked
-    if (previewAudio) previewAudio.pause();
-    setPreviewAudio(null);
+  const handleLocalSuggestionClick = (suggestion) => { // Accept the full suggestion object
+    hookHandleSuggestionClick(suggestion.tag, content, setContent); // Insert the tag
+
+    // Play the selected sound.
+    // handlePreviewSound will take care of stopping any previous preview.
+    if (suggestion.url) {
+      // Create a pseudo-event object as handlePreviewSound expects an event as the first argument.
+      const pseudoEvent = { stopPropagation: () => {} };
+      handlePreviewSound(pseudoEvent, suggestion.url);
+    } else {
+      // If the clicked suggestion has no URL, ensure any active preview is stopped.
+      // This case should be rare for Ampersounds but is good defensive programming.
+      if (previewAudio) {
+        previewAudio.pause();
+        setPreviewAudio(null); // This will trigger useEffect cleanup for the old audio.
+      }
+    }
+    // The hook's handleSuggestionClick already hides suggestions.
   };
 
   const handleImageChange = (event) => {
@@ -225,7 +238,7 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
                         {/* Suggestion Info - Now handles insertion click */} 
                         <div 
                             style={{display: 'flex', alignItems: 'center', flexGrow: 1, cursor: 'pointer'}}
-                            onClick={() => handleLocalSuggestionClick(sugg.tag)} // Attach insert click here
+                            onClick={() => handleLocalSuggestionClick(sugg)} // Pass the full sugg object
                         >
                           <span>{sugg.tag}</span> 
                           <span className="suggestion-item-details">(by @{sugg.owner})</span>
