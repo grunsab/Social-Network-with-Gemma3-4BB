@@ -144,11 +144,11 @@ const AmpersoundRecorder = () => {
     return (
         <div className="ampersound-recorder">
             <h3>Create New Ampersound</h3>
-            {error && <p className="error-message" style={{ color: 'red' }}>Error: {error}</p>}
-            {successMessage && <p className="success-message" style={{ color: 'green' }}>{successMessage}</p>}
+            {error && <p className="error-message">{error}</p>}
+            {successMessage && <p className="success-message">{successMessage}</p>}
             
             <div>
-                <label htmlFor="ampersoundName">Name (e.g., &hello): &</label>
+                <label htmlFor="ampersoundName">Name (e.g., hello_world): &</label>
                 <input
                     type="text"
                     id="ampersoundName"
@@ -167,15 +167,17 @@ const AmpersoundRecorder = () => {
             )}
 
             {audioBlob && !isRecording && (
-                <div>
+                <div className="audio-preview-section">
                     <p>Recording finished. Preview:</p>
                     <audio src={URL.createObjectURL(audioBlob)} controls />
-                    <button onClick={handleSaveAmpersound} disabled={isLoading || !ampersoundName.trim()}>
-                        {isLoading ? 'Saving...' : 'Save Ampersound'}
-                    </button>
-                    <button onClick={() => { setAudioBlob(null); setAmpersoundName(''); setError(null); setSuccessMessage(null);}} disabled={isLoading} style={{backgroundColor: 'grey'}}>
-                        Record New / Discard
-                    </button>
+                    <div className="action-buttons-container">
+                        <button onClick={handleSaveAmpersound} disabled={isLoading || !ampersoundName.trim()}>
+                            {isLoading ? 'Saving...' : 'Save Ampersound'}
+                        </button>
+                        <button onClick={() => { setAudioBlob(null); setAmpersoundName(''); setError(null); setSuccessMessage(null);}} disabled={isLoading} className="discard-button">
+                            Record New / Discard
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

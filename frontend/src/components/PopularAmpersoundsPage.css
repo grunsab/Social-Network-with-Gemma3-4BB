@@ -1,0 +1,71 @@
+/* frontend/src/components/PopularAmpersoundsPage.css */
+
+/* Assuming .ampersound-list and .ampersound-list-item styles are reused from Profile.css.
+   If not, those styles (including their responsive media queries) should be copied here.
+*/
+
+/* Styling for the info section within each list item on the popular page */
+.popular-ampersounds-page .ampersound-list .ampersound-info {
+    display: flex;
+    flex-wrap: wrap; /* Allow items to wrap to the next line */
+    align-items: center; /* Align items nicely if they wrap */
+    gap: 0.25rem 0.75rem; /* Small vertical gap, decent horizontal gap */
+    flex-grow: 1; /* Allow it to take available space if list item is flex row */
+    padding-left: 0.5rem; /* Add some padding if button is to its left before stacking */
+}
+
+.popular-ampersounds-page .ampersound-list .ampersound-name {
+    font-weight: 600; /* Make the name stand out */
+    font-size: 1.05em;
+    /* flex-basis: 100%; /* Optional: make name always take full width if it's the first item in a wrapped row */
+    /* white-space: nowrap; /* If you don't want the name itself to break */
+} 
+
+.popular-ampersounds-page .ampersound-list .ampersound-author,
+.popular-ampersounds-page .ampersound-list .ampersound-timestamp,
+.popular-ampersounds-page .ampersound-list .ampersound-play-count {
+    font-size: 0.85em;
+    opacity: 0.8;
+    white-space: nowrap; /* Prevent individual parts from breaking mid-word, let flex-wrap handle line breaks between elements */
+}
+
+.popular-ampersounds-page .ampersound-list .ampersound-author a {
+    /* Link styles are inherited or can be customized here */
+    font-weight: 500; /* Ensure link stands out slightly */
+    color: var(--link-color-dark); /* Explicitly use theme link color */
+}
+
+.popular-ampersounds-page .ampersound-list .ampersound-author a:hover {
+    color: var(--primary-color);
+}
+
+/* Ensure play button has good styling when .ampersound-list-item comes from Profile.css */
+.popular-ampersounds-page .ampersound-list-item > .ampersound-play-button {
+    flex-shrink: 0; /* Prevent button from shrinking if next to info before stacking */
+    /* When .ampersound-list-item stacks (from Profile.css @media <= 600px): */
+    /* width: 100%; /* This would make it full width when stacked */
+    /* align-self: flex-start; */
+    /* margin-bottom: 0.5rem; */ /* Add space below button when stacked if needed */
+}
+
+
+/* Media query for very small screens if further adjustments are needed */
+@media (max-width: 400px) {
+    .popular-ampersounds-page .ampersound-list .ampersound-name {
+        font-size: 1em;
+    }
+
+    .popular-ampersounds-page .ampersound-list .ampersound-info {
+        gap: 0.1rem 0.5rem; /* Reduce gaps further */
+        padding-left: 0; /* Remove padding if button is stacked above */
+    }
+
+    /* If the button and info are stacked due to Profile.css rules, 
+       this ensures the button looks good and potentially takes full width. */
+    .popular-ampersounds-page .ampersound-list-item > .ampersound-play-button {
+       /* If stacked by .ampersound-list-item { flex-direction: column; } */
+       width: 100%;
+       margin-bottom: 0.5rem;
+       padding: 8px 10px; /* Ensure decent tap area */
+    }
+} 

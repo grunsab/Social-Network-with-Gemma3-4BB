@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -24,6 +24,7 @@ import Spinner from './components/Spinner'; // Import Spinner
 
 function App() {
   const { currentUser, loading, logout } = useAuth(); // Get user and logout
+  const [isNavOpen, setIsNavOpen] = useState(false); // State for mobile nav
 
   // Handle logout directly in nav for simplicity here
   const handleLogout = async () => {
@@ -39,7 +40,14 @@ function App() {
   return (
     <Router>
       <nav>
-        <ul>
+        {/* Hamburger button for mobile */}
+        <button className={`nav-toggle ${isNavOpen ? 'open' : ''}`} onClick={() => setIsNavOpen(!isNavOpen)} aria-label="Toggle navigation">
+          {/* Simple hamburger icon using spans */}
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <ul className={isNavOpen ? 'nav-links nav-links-open' : 'nav-links'}>
           {/* Add App Title/Link */} 
           <li> 
             <Link to="/" className="nav-title">SocialNet</Link>

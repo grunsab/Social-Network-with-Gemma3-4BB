@@ -11,58 +11,104 @@
     color: #333;
 }
 
-.ampersound-recorder div {
+.ampersound-recorder div:not(.action-buttons-container) {
     margin-bottom: 10px;
 }
 
 .ampersound-recorder label {
     margin-right: 5px;
     font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
 }
 
 .ampersound-recorder input[type="text"] {
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    min-width: 200px;
+    width: 100%;
 }
 
 .ampersound-recorder button {
-    padding: 8px 15px;
+    padding: 10px 15px;
     border: none;
     border-radius: 4px;
-    background-color: #007bff;
-    color: white;
+    background-color: var(--primary-color);
+    color: var(--background-color-dark);
     cursor: pointer;
     margin-right: 10px;
-    transition: background-color 0.2s ease-in-out;
+    margin-bottom: 10px;
+    transition: background-color 0.2s ease-in-out, opacity 0.2s ease-in-out;
+    font-size: 0.95em;
+}
+
+.ampersound-recorder > button,
+.ampersound-recorder > div > button:only-child {
+    display: block;
+    width: 100%;
+    margin-right: 0;
 }
 
 .ampersound-recorder button:hover {
-    background-color: #0056b3;
+    background-color: var(--primary-hover-color);
 }
 
 .ampersound-recorder button:disabled {
     background-color: #ccc;
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
+.action-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.action-buttons-container button {
+    margin-right: 0;
+    margin-bottom: 0;
+    flex-grow: 1;
+    flex-basis: calc(50% - 5px);
+    min-width: 120px;
+}
+
+.discard-button {
+    background-color: #6c757d;
+    color: white;
+}
+
+.discard-button:hover {
+    background-color: #5a6268;
+}
+
 .ampersound-recorder .error-message {
-    color: #dc3545; /* Bootstrap danger color */
+    color: var(--error-color);
+    background-color: rgba(244, 113, 116, 0.1);
+    border: 1px solid rgba(244, 113, 116, 0.3);
+    padding: 0.75em 1em;
+    border-radius: 6px;
     font-size: 0.9em;
-    margin-top: 5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
 }
 
 .ampersound-recorder .success-message {
-    color: #28a745; /* Bootstrap success color */
+    color: #28a745;
+    background-color: rgba(40, 167, 69, 0.1);
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    padding: 0.75em 1em;
+    border-radius: 6px;
     font-size: 0.9em;
-    margin-top: 5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
 }
 
 .ampersound-recorder audio {
     display: block;
     margin-top: 10px;
-    margin-bottom: 10px;
-    width: 100%; /* Make audio player responsive */
-    max-width: 300px;
+    margin-bottom: 15px;
+    width: 100%;
+    max-width: 100%;
 } 

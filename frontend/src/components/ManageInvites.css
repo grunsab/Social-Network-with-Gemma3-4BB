@@ -87,5 +87,47 @@
 .invite-details {
     font-size: 0.9em;
     opacity: 0.8;
-    margin-left: auto; /* Push details to the right */
+    /* margin-left: auto; /* Removed, will control alignment in flex context */
+}
+
+@media (max-width: 600px) {
+  .generate-invite-section {
+    /* The existing flex-wrap should handle this section well.
+       If the button feels too small or awkwardly placed when wrapped,
+       you could make it display: block; width: 100%; here. */
+  }
+
+  .invite-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Make direct children of the list item full width when stacked */
+  .invite-list-item > .invite-code,
+  .invite-list-item > .invite-actions,
+  .invite-list-item > .invite-details,
+  .invite-list-item > span { /* For the "Used by" span */
+    width: 100%;
+    margin-left: 0; /* Reset auto margin */
+  }
+
+  .invite-actions {
+    display: flex; /* If there could be multiple buttons in invite-actions */
+    /* flex-direction: column; /* Uncomment if buttons inside actions should stack */
+    /* gap: 0.5rem; */ /* Uncomment for spacing between stacked buttons */
+  }
+
+  .invite-actions button {
+    width: auto; /* Allow button to size to its content initially */
+    /* If you want full-width action buttons when stacked: */
+    /* width: 100%; */
+    /* margin-bottom: 0.5rem; /* If stacking buttons inside actions */
+  }
+  /* Ensure the last button in actions doesn't have bottom margin if they stack */
+  /* .invite-actions button:last-child { margin-bottom: 0; } */
+
+  .invite-details {
+    text-align: left; /* Default, but good to be explicit */
+  }
 } 

@@ -264,13 +264,37 @@
 /* Responsive adjustments */
 @media (max-width: 600px) {
     .ampersound-list-item {
-        /* Keep as row, rely on internal wrapping */
+        flex-direction: column; /* Stack info and actions */
+        align-items: flex-start; /* Align items to the start */
+        gap: 0.5rem; /* Reduce gap for stacked layout */
     }
     .ampersound-item-info {
-       /* flex-basis: 70%;  Maybe not needed if relying on flex-grow */
-       margin-right: 5px; /* Reduce space */
+       margin-right: 0; /* No margin needed when stacked */
+       width: 100%; /* Take full width */
     }
     .ampersound-item-actions {
-       /* flex-basis: 25%; */
+       width: 100%; /* Take full width */
+       justify-content: flex-start; /* Align buttons to the start */
+    }
+
+    /* Adjust profile username font size on mobile */
+    .profile-username {
+        font-size: 1.5em; /* Reduced from 1.8em */
+    }
+}
+
+/* For very small screens */
+@media (max-width: 400px) {
+    .profile-picture {
+        width: 80px;
+        height: 80px;
+    }
+
+    .profile-header {
+        gap: 1rem; /* Further reduce gap if picture is smaller */
+    }
+
+    .profile-username {
+        font-size: 1.3em; /* Further reduce font size */
     }
 } 

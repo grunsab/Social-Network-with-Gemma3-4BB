@@ -64,4 +64,38 @@
 }
 .reject-button {
      /* Example: border-color: orange; color: orange; */
+}
+
+@media (max-width: 600px) { /* Or a suitable breakpoint */
+  .friend-request-item {
+    flex-direction: column; /* Stack sender and actions vertically */
+    align-items: flex-start; /* Align to the start */
+    padding: 0.75rem; /* Slightly reduce padding for smaller cards */
+  }
+
+  .friend-request-item > div { /* Target .friend-request-sender and .friend-request-actions */
+    width: 100%; /* Make them take full width */
+  }
+
+  .friend-request-actions {
+    /* Ensure buttons within actions can also wrap or stack if needed */
+    flex-wrap: wrap; /* Allow Accept/Reject buttons to wrap */
+    justify-content: flex-start; /* Align buttons to the start */
+    margin-top: 0.5rem; /* Add some space above actions when stacked */
+  }
+
+  .friend-request-actions button {
+    flex-grow: 1; /* Allow buttons to grow and share space */
+    flex-basis: calc(50% - 0.375rem); /* Aim for two buttons, accounting for 0.75rem gap */
+    min-width: 100px; /* Prevent buttons from becoming too small before wrapping/growing */
+    /* Or, for full width stacked buttons:
+    flex-basis: 100%;
+    margin-bottom: 0.5rem; // If stacking them vertically
+    */
+  }
+  /* Remove margin from last button if stacking vertically inside actions
+  .friend-request-actions button:last-child {
+      margin-bottom: 0;
+  }
+  */
 } 

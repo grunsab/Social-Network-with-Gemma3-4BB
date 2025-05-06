@@ -367,3 +367,19 @@ nav a.active { /* Style for active link */
   color: #0056b3; /* Darker blue on hover */
   text-decoration: none; /* Optional: remove underline on hover */
 }
+
+/* Add a general media query for small screens for card padding adjustment */
+@media (max-width: 480px) { /* Breakpoint for very small screens */
+  .card {
+    padding: 1.25rem 1rem; /* Reduce horizontal padding for cards, keep vertical reasonable */
+  }
+
+  /* Optional: Adjust base font size slightly on very small devices */
+  /* html {
+    font-size: 90%; 
+  } */
+  /* Or target body for font size if preferred */
+  /* body {
+    font-size: 15px; 
+  } */
+}

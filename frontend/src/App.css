@@ -101,3 +101,156 @@
 nav ul {
     align-items: center; /* Vertically align items if they wrap */
 }
+
+/* Responsive Navigation Styles */
+.nav-toggle {
+  display: none; /* Hidden by default, shown on mobile */
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin-left: auto; /* Push to the right on mobile when title is present */
+}
+
+.nav-toggle span {
+  display: block;
+  width: 25px;
+  height: 3px;
+  background-color: var(--text-color-dark);
+  margin: 5px 0;
+  transition: all 0.3s ease-in-out;
+}
+
+/* Styling for when the nav is open (optional: hamburger animation) */
+.nav-toggle.open span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.nav-toggle.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle.open span:nth-child(3) {
+  transform: rotate(-45deg) translate(7px, -6px);
+}
+
+.nav-links {
+  /* Existing ul styles from index.css: list-style: none; padding: 0; margin: 0; display: flex; gap: 1.5rem; */
+  /* We will override display and flex-direction on mobile */
+  align-items: center; /* from existing nav ul */
+}
+
+
+@media (max-width: 768px) { /* Mobile and Tablet styles */
+  .nav-toggle {
+    display: block; /* Show hamburger */
+    order: 2; /* Place hamburger after nav title if title is also flex item */
+    margin-left: 1rem; /* Spacing from other elements if needed */
+  }
+
+  nav ul.nav-links { /* Target the <ul> specifically */
+    display: none; /* Hide links by default on mobile */
+    flex-direction: column;
+    width: 100%;
+    position: absolute;
+    top: 100%; /* Position below the nav bar */
+    left: 0;
+    background-color: var(--nav-background-dark); /* Or a slightly different shade for dropdown */
+    padding: 1rem 0; /* Vertical padding for the dropdown */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Add shadow for dropdown effect */
+    z-index: 99; /* Ensure it's above other content but below sticky nav */
+  }
+
+  nav ul.nav-links.nav-links-open {
+    display: flex; /* Show when open */
+  }
+
+  nav ul.nav-links li {
+    width: 100%;
+    text-align: center;
+    margin: 0.5rem 0; /* Spacing between items in vertical menu */
+  }
+
+  nav ul.nav-links li a {
+    padding: 0.75rem 1rem; /* Larger clickable area for mobile */
+    display: block; /* Make link fill list item */
+    width: 100%;
+    border-bottom: none; /* Remove bottom border from desktop active state */
+  }
+  nav ul.nav-links li a.active {
+      background-color: var(--primary-color); /* Highlight active link background */
+      color: var(--background-color-dark); /* Text color for active link */
+      border-bottom: none;
+  }
+  nav ul.nav-links li a:hover {
+      background-color: var(--primary-hover-color);
+      color: var(--background-color-dark);
+      border-bottom: none;
+  }
+
+  .nav-title {
+      margin-right: auto; /* Keeps title to the left */
+  }
+
+  /* Ensure the main nav itself allows space for the toggle and title */
+  nav {
+    display: flex; /* Ensure nav itself is flex for title and toggle alignment */
+    justify-content: space-between; /* Align title left, toggle right */
+    align-items: center;
+    position: sticky; /* Already sticky from index.css */
+    top: 0;
+    z-index: 100;
+  }
+
+  /* Adjust padding for main content on mobile */
+  .main-content {
+    padding: 1rem; /* Reduced padding for mobile */
+  }
+}
+
+@media (min-width: 769px) { /* Desktop styles */
+  .nav-toggle {
+    display: none; /* Hide hamburger on desktop */
+  }
+
+  nav ul.nav-links { /* Target the <ul> specifically */
+    display: flex !important; /* Ensure it's flex and overrides mobile 'none' */
+    flex-direction: row;
+    position: static;
+    width: auto; /* Reset width */
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0; /* Reset padding */
+  }
+
+  nav ul.nav-links li {
+    width: auto; /* Reset width */
+    text-align: left;
+    margin: 0; /* Reset margin, rely on gap from index.css */
+  }
+  nav ul.nav-links li a {
+    display: inline; /* Reset display */
+    padding: 0.5rem 0; /* Revert to original padding from index.css nav a */
+    /* border-bottom for active state is handled by index.css nav a.active */
+  }
+  nav ul.nav-links li a.active {
+      background-color: transparent;
+      color: var(--primary-color);
+      /* border-bottom is handled by index.css for desktop */
+  }
+  nav ul.nav-links li a:hover {
+      background-color: transparent;
+      color: var(--primary-color);
+      /* border-bottom for hover is handled by index.css for desktop */
+  }
+
+  /* Restore nav layout if it was changed for mobile */
+  nav {
+    display: block; /* Or revert to original display if it wasn't flex */
+    /* Padding and other properties from index.css will apply */
+  }
+  
+  /* Ensure the nav ul in nav tag is flex on desktop */
+  /* This is already handled by index.css: nav ul { display: flex; } */
+
+}

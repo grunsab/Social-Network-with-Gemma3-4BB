@@ -42,6 +42,41 @@
     line-height: 1.6;
 }
 
+/* Styles for content rendered via dangerouslySetInnerHTML within .post-content */
+.post-content img,
+.post-content iframe,
+.post-content video {
+    max-width: 100%;
+    height: auto;
+    display: block; /* Ensures block-level behavior and helps with margins */
+    margin-top: 0.5rem; /* Consistent spacing */
+    margin-bottom: 0.5rem;
+}
+
+.post-content table {
+    max-width: 100%;
+    display: block; /* Important for overflow to work */
+    overflow-x: auto; /* Allows horizontal scrolling for wide tables */
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-collapse: collapse; /* Basic table styling */
+    width: 100%; /* Try to make it use available width first */
+}
+
+.post-content th,
+.post-content td {
+    border: 1px solid var(--border-color-dark);
+    padding: 0.5em;
+    text-align: left;
+}
+
+@media (prefers-color-scheme: light) {
+    .post-content th,
+    .post-content td {
+        border: 1px solid var(--border-color-light);
+    }
+}
+
 .post-footer {
     display: flex;
     justify-content: space-between;
@@ -183,4 +218,45 @@
     width: 100%;
     margin-top: 0.5em;
     flex-basis: 100%; /* Ensure it takes full width below input/button */
+}
+
+@media (max-width: 600px) { /* Adjust breakpoint as needed */
+  .post-header {
+    flex-wrap: wrap;
+    gap: 0.5rem; /* Slightly reduce gap */
+  }
+
+  /* Optional: If timestamp or privacy needs to be on its own line more reliably */
+  /* We can make specific items in the header take full width to stack them */
+  .post-header > .post-timestamp,
+  .post-header > .post-privacy,
+  .post-header > .post-delete-button { /* If delete button needs more space or its own line */
+    /* flex-basis: 100%; */ /* Uncomment if needed */
+    /* margin-top: 0.25rem; */ /* Add space if they wrap to new line */
+  }
+
+  .post-footer {
+    /* If you have multiple items that might crowd, stack them */
+    /* flex-direction: column; */
+    /* align-items: flex-start; */
+    /* gap: 0.75rem; */
+
+    /* Or, if wrapping is generally enough for a few items: */
+    flex-wrap: wrap;
+    gap: 0.75rem; /* Keep a decent gap for touch */
+  }
+
+  .comment-form {
+    flex-direction: column;
+    align-items: stretch; /* Make items take full width */
+  }
+
+  .comment-form textarea {
+    margin-bottom: 0.75rem; /* Add margin when button is below */
+  }
+
+  .comment-form button {
+    align-self: auto; /* Reset from desktop view if it was flex-end */
+    width: 100%; /* Make button full width for easier tapping */
+  }
 } 

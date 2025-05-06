@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom'; // For linking to user profiles
 import Spinner from './Spinner';
 import { FaPlay, FaPause } from 'react-icons/fa'; // Import Play/Pause icons
+import './PopularAmpersoundsPage.css'; // Import the CSS file
 // You might want a specific CSS file for this page later
 // import './PopularAmpersoundsPage.css';
 
