@@ -15,16 +15,15 @@ class UserRegistration(Resource):
 
         invite_code_obj = None # To store the valid InviteCode object if found
 
-        # --- Invite Code Validation --- 
-        if invite_code_str:
-            invite_code_obj = InviteCode.query.filter_by(code=invite_code_str).first()
-            # Check if code exists and is still valid (i.e., NOT used)
-            if not invite_code_obj or invite_code_obj.is_used:
-                return {'message': 'Invalid or used invite code'}, 400 # Bad Request
-        # else: 
-            # Optional: If invites are MANDATORY, reject here
-            # return {'message': 'Invite code required for registration'}, 400
-            # If optional, proceed without validation if no code provided.
+        # --- Invite Code Validation ---
+        # Make invite code mandatory
+        if not invite_code_str:
+            return {'message': 'Invite code is required for registration'}, 400
+
+        invite_code_obj = InviteCode.query.filter_by(code=invite_code_str).first()
+        # Check if code exists and is still valid (i.e., NOT used)
+        if not invite_code_obj or invite_code_obj.is_used:
+            return {'message': 'Invalid or used invite code'}, 400 # Bad Request
 
         if not username or not email or not password:
             return {'message': 'Missing username, email, or password'}, 400
