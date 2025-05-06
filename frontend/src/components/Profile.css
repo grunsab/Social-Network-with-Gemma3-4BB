@@ -167,38 +167,88 @@
     padding: 0;
 }
 
+/* Ampersound List Item Layout */
 .ampersound-list-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border-color-dark); /* Use theme variable */
+    padding: 12px 0; /* Slightly more padding */
+    border-bottom: 1px solid var(--border-color-dark);
+    gap: 15px; /* Add gap between info and button */
 }
 
-.ampersound-list-item:last-child {
-    border-bottom: none;
+.ampersound-item-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap; /* Allow wrapping within the info section */
+    gap: 10px; /* Space between name, player, count */
+    flex-grow: 1; /* Allow info section to take available space */
 }
 
 .ampersound-name {
     font-weight: bold;
-    color: var(--primary-color); /* Use theme variable */
-    margin-right: 15px;
+    color: var(--primary-color);
+    margin-right: 5px; /* Reduced margin */
+    white-space: nowrap; /* Prevent name from wrapping */
 }
 
 .ampersound-audio-player {
-    height: 40px; /* Adjust height for a more compact player */
-    max-width: 250px; /* Limit width of the audio player */
+    height: 35px; /* More compact player */
+    max-width: 220px; 
     vertical-align: middle;
 }
 
-/* Responsive adjustments for smaller screens if needed */
+.ampersound-play-count {
+    font-size: 0.85em;
+    color: var(--text-color-dark);
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+/* Styling for the delete button */
+.ampersound-delete-button {
+    padding: 5px 8px; /* Smaller padding for icon button */
+    background-color: transparent; /* Make background transparent */
+    color: var(--error-color); /* Use error color for delete icon */
+    border: 1px solid var(--error-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    line-height: 1; /* Ensure icon centers vertically */
+    flex-shrink: 0; /* Prevent button from shrinking */
+}
+
+.ampersound-delete-button:hover {
+    background-color: rgba(244, 113, 116, 0.1); /* Use error color with alpha for hover */
+    color: var(--error-color);
+}
+
+.ampersound-delete-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent; /* Keep background transparent when disabled */
+}
+
+.ampersound-delete-button svg {
+    width: 0.9em; /* Adjust icon size if needed */
+    height: 0.9em;
+    vertical-align: middle; /* Helps alignment */
+}
+
+/* Responsive adjustments */
 @media (max-width: 600px) {
     .ampersound-list-item {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row; /* Keep as row but allow wrapping internally */
+        align-items: center; /* Center items vertically in row */
+    }
+    .ampersound-item-info {
+       flex-basis: 80%; /* Allow info to take most width */
+    }
+    .ampersound-delete-button {
+        flex-basis: 15%; /* Assign some basis to button */
+        align-self: center; /* Center button vertically */
     }
     .ampersound-audio-player {
-        margin-top: 8px;
-        max-width: 100%;
+        /* max-width: 100%; (already set) */
     }
 } 

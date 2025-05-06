@@ -5,6 +5,7 @@ import Post from './Post'; // Re-use Post component
 import './Profile.css'; // Import the CSS file
 import Spinner from './Spinner'; // Import Spinner
 import AmpersoundRecorder from './AmpersoundRecorder'; // Import AmpersoundRecorder
+import { FaTrashAlt } from 'react-icons/fa'; // Import Trash icon
 
 function Profile() {
   const { username } = useParams(); // Get username from URL parameter
@@ -18,6 +19,7 @@ function Profile() {
   const [myAmpersounds, setMyAmpersounds] = useState([]);
   const [loadingAmpersounds, setLoadingAmpersounds] = useState(false);
   const [errorAmpersounds, setErrorAmpersounds] = useState('');
+  const [deleteInProgress, setDeleteInProgress] = useState(null); // Track which sound ID is being deleted
 
   // Use useCallback for fetchProfile to prevent re-renders if passed as prop
   const fetchProfile = useCallback(async () => {
@@ -146,6 +148,36 @@ function Profile() {
      });
   };
 
+  // Handler for deleting an Ampersound
+  const handleDeleteAmpersound = async (soundId, soundName) => {
+      if (!window.confirm(`Are you sure you want to delete the Ampersound "&${soundName}"? This cannot be undone.`)) {
+          return;
+      }
+      setDeleteInProgress(soundId); // Indicate deletion is happening for this ID
+      setErrorAmpersounds(''); // Clear previous errors
+      try {
+          const response = await fetch(`/api/v1/ampersounds/${soundId}`, {
+              method: 'DELETE',
+              credentials: 'include' // Include session cookie
+          });
+          const data = await response.json(); // Attempt to parse JSON even on error
+
+          if (!response.ok) {
+              throw new Error(data.message || 'Failed to delete Ampersound');
+          }
+
+          // Remove from state on success
+          setMyAmpersounds(prevSounds => prevSounds.filter(s => s.id !== soundId));
+          console.log("Ampersound deleted successfully:", soundId);
+
+      } catch (err) {
+          console.error(`Error deleting Ampersound ${soundId}:`, err);
+          setErrorAmpersounds(`Error deleting "&${soundName}": ${err.message}`);
+      } finally {
+          setDeleteInProgress(null); // Clear deletion indicator
+      }
+  };
+
   if (loading) return <Spinner contained={true} />; // Use spinner for initial profile load
   // Show profile error and action error separately
   const profileError = !profileData && error;
@@ -229,9 +261,19 @@ function Profile() {
                 <ul className="ampersound-list">
                     {myAmpersounds.map(sound => (
                         <li key={sound.id} className="ampersound-list-item">
-                            <span className="ampersound-name">&{sound.name}</span>
-                            {sound.url && <audio controls src={sound.url} className="ampersound-audio-player"></audio>}
-                            {/* TODO: Add delete/rename buttons here later */} 
+                            <div className="ampersound-item-info">
+                                <span className="ampersound-name">&{sound.name}</span>
+                                {sound.url && <audio controls src={sound.url} className="ampersound-audio-player"></audio>}
+                                <span className="ampersound-play-count">({sound.play_count ?? 0} plays)</span>
+                            </div>
+                            <button 
+                                className="ampersound-delete-button icon-button"
+                                onClick={() => handleDeleteAmpersound(sound.id, sound.name)}
+                                disabled={deleteInProgress === sound.id} // Disable button during its deletion
+                                title={`Delete &${sound.name}`}
+                            >
+                                {deleteInProgress === sound.id ? <Spinner inline={true} size="small" /> : <FaTrashAlt />}
+                            </button>
                         </li>
                     ))}
                 </ul>

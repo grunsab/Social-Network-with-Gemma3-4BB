@@ -483,51 +483,42 @@ def create_app(config_name='default'):
         if not user:
             return jsonify({"message": "User not found"}), 404
 
-        # Sanitize sound_name before querying
         clean_sound_name = secure_filename(sound_name).lower()
         ampersound = Ampersound.query.filter_by(user_id=user.id, name=clean_sound_name).first()
         if not ampersound:
             return jsonify({"message": "Ampersound not found"}), 404
 
-        if s3_client and app.config.get('S3_BUCKET'):
-            s3_bucket = app.config['S3_BUCKET']
-            s3_key = ampersound.file_path
-            try:
-                # Generate a presigned URL for temporary access if files aren't public
-                # Or construct direct URL if files are public
-                # For simplicity, assuming public access for now or direct URL construction
-                # If your bucket/files are private, you MUST generate a presigned URL here.
-                
-                domain_name = app.config.get('DOMAIN_NAME_IMAGES')
-                s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+        # Increment play_count
+        try:
+            ampersound.play_count = (Ampersound.play_count or 0) + 1 # Ensure play_count is not None before incrementing
+            db.session.add(ampersound) # Add to session, or it might already be there
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error incrementing play_count for ampersound {ampersound.id}: {e}")
+            # Decide if this should be a critical error or just logged. For now, we log and continue.
 
-                if domain_name: # If a CDN or direct domain is configured for images/assets
-                    file_url = f"{domain_name}/{s3_key}"
-                elif s3_endpoint_url: # For S3-compatible services like MinIO/R2
-                    # Ensure the URL is formed correctly based on your S3 provider
-                    # This might be https://<bucket>.<endpoint>/<key> or https://<endpoint>/<bucket>/<key>
-                    # The example below assumes endpoint/bucket/key
-                    file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-                    # For Cloudflare R2 with public bucket and custom domain, it might be simpler.
-                    # If R2 bucket is public and mapped to r2.dev/your-bucket, then file_url = f"https://r2.dev/{s3_bucket}/{s3_key}"
-                else: # Fallback for AWS S3 direct (less common for direct serving without CF etc)
-                    # Standard AWS S3 URL: https://<bucket-name>.s3.<region>.amazonaws.com/<key>
-                    # This requires region to be correctly set and not 'auto'
-                    s3_region = app.config.get('S3_REGION', 'us-east-1') # Default if not set
-                    if s3_region == 'auto': # 'auto' is R2 specific, AWS S3 needs a region
-                        return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
-                    file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
-                
-                return jsonify({"name": ampersound.name, "url": file_url, "user": user.username}), 200
-                # To directly serve/redirect:
-                # from flask import redirect
-                # return redirect(file_url, code=302)
+        s3_client = app.config.get('S3_CLIENT') # Get S3 client from app config
+        s3_bucket = app.config.get('S3_BUCKET')
+        domain_name = app.config.get('DOMAIN_NAME_IMAGES')
+        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+        s3_key = ampersound.file_path
 
-            except Exception as e:
-                app.logger.error(f"Error generating Ampersound URL: {e}")
-                return jsonify({"message": "Error retrieving Ampersound URL."}), 500
-        else:
-            return jsonify({"message": "File storage (S3) is not configured on the server."}), 500
+        try:
+            if domain_name: 
+                file_url = f"{domain_name}/{s3_key}"
+            elif s3_endpoint_url: 
+                file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+            else: 
+                s3_region = app.config.get('S3_REGION', 'us-east-1') 
+                if s3_region == 'auto': 
+                    return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
+                file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+            
+            return jsonify({"name": ampersound.name, "url": file_url, "user": user.username, "play_count": ampersound.play_count}), 200
+        except Exception as e:
+            app.logger.error(f"Error generating Ampersound URL for {ampersound.id}: {e}")
+            return jsonify({"message": "Error retrieving Ampersound URL."}), 500
 
     @app.route('/api/v1/ampersounds/my_sounds', methods=['GET'])
     @login_required
@@ -568,6 +559,92 @@ def create_app(config_name='default'):
             })
         
         return jsonify(results), 200
+
+    @app.route('/api/v1/ampersounds/all', methods=['GET'])
+    def list_all_ampersounds():
+        all_ampersounds = (
+            Ampersound.query
+            .join(User, User.id == Ampersound.user_id)
+            .options(joinedload(Ampersound.user))  # Eager load user details
+            .order_by(Ampersound.play_count.desc(), Ampersound.timestamp.desc()) # Sort by play_count DESC, then timestamp DESC
+            .limit(50)  # Limit to 50 for now
+            .all()
+        )
+
+        s3_client = app.config.get('S3_CLIENT')
+        s3_bucket = app.config.get('S3_BUCKET')
+        domain_name_images = app.config.get('DOMAIN_NAME_IMAGES')
+        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+        s3_region = app.config.get('S3_REGION', 'us-east-1')
+
+        results = []
+        for ampersound in all_ampersounds:
+            file_url = None
+            if s3_client and s3_bucket:
+                s3_key = ampersound.file_path
+                try:
+                    if domain_name_images:
+                        file_url = f"{domain_name_images}/{s3_key}"
+                    elif s3_endpoint_url:
+                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                    else:
+                        if s3_region == 'auto':
+                            app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region for AWS S3.")
+                        else:
+                            file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                except Exception as e:
+                    app.logger.error(f"Error generating URL for ampersound {ampersound.id}: {e}")
+            
+            results.append({
+                'id': ampersound.id,
+                'name': ampersound.name,
+                'user': {
+                    'id': ampersound.user.id,
+                    'username': ampersound.user.username
+                },
+                'url': file_url,
+                'timestamp': ampersound.timestamp.isoformat(),
+                'play_count': ampersound.play_count # Include play_count in response
+            })
+        
+        return jsonify(results), 200
+
+    @app.route('/api/v1/ampersounds/<int:sound_id>', methods=['DELETE'])
+    @login_required
+    def delete_ampersound(sound_id):
+        ampersound = Ampersound.query.get(sound_id)
+
+        if not ampersound:
+            return jsonify({"message": "Ampersound not found"}), 404
+
+        # Verify ownership
+        if ampersound.user_id != current_user.id:
+            return jsonify({"message": "You do not have permission to delete this Ampersound"}), 403 # Forbidden
+
+        s3_client = app.config.get('S3_CLIENT')
+        s3_bucket = app.config.get('S3_BUCKET')
+        s3_key_to_delete = ampersound.file_path
+
+        try:
+            # Delete from DB first
+            db.session.delete(ampersound)
+            db.session.commit()
+
+            # Then attempt to delete from S3
+            if s3_client and s3_bucket and s3_key_to_delete:
+                try:
+                    s3_client.delete_object(Bucket=s3_bucket, Key=s3_key_to_delete)
+                    app.logger.info(f"Successfully deleted S3 object: {s3_key_to_delete}")
+                except Exception as s3_error:
+                    # Log S3 deletion error but don't fail the request if DB delete succeeded
+                    app.logger.error(f"Error deleting S3 object {s3_key_to_delete} for deleted ampersound {sound_id}: {s3_error}")
+            
+            return jsonify({"message": "Ampersound deleted successfully"}), 200
+        
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error deleting ampersound {sound_id} from database: {e}")
+            return jsonify({"message": "Failed to delete Ampersound"}), 500
 
     return app
 

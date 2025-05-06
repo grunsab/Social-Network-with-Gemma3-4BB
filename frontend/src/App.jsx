@@ -17,6 +17,7 @@ import Profile from './components/Profile'; // Import Profile component
 import CategoryView from './components/CategoryView'; // Import CategoryView
 import ManageInvites from './components/ManageInvites'; // Import ManageInvites
 import FriendRequests from './components/FriendRequests'; // Import FriendRequests
+import PopularAmpersoundsPage from './components/PopularAmpersoundsPage'; // Import new page
 import './App.css';
 import Spinner from './components/Spinner'; // Import Spinner
 
@@ -41,6 +42,9 @@ function App() {
           {/* Add App Title/Link */} 
           <li> 
             <Link to="/" className="nav-title">SocialNet</Link>
+          </li>
+          <li> {/* Public link to Popular Ampersounds */}
+            <NavLink to="/popular-ampersounds" className={({ isActive }) => isActive ? "active" : ""}>Popular Sounds</NavLink>
           </li>
 
           {currentUser ? (
@@ -86,6 +90,7 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={!currentUser ? <Login /> : <Navigate replace to="/" />} />
           <Route path="/register" element={!currentUser ? <Register /> : <Navigate replace to="/" />} />
+          <Route path="/popular-ampersounds" element={<PopularAmpersoundsPage />} /> {/* New public route */}
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
