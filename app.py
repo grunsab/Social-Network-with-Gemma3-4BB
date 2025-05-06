@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 import base64
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_login import login_required, current_user
 from flask_restful import Api
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -371,41 +371,24 @@ def create_app(config_name='default'):
         # Ensure os is available (it's imported at the top of app.py)
         # Ensure send_from_directory is available (imported from flask at the top)
         
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print(f"--- DEBUG: SERVE_REACT_APP CALLED WITH PATH: {path} ---")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        
-        # 'app' is the Flask instance from the create_app scope
-        effective_static_folder = app.static_folder
-        print(f"app.static_folder (resolved by Flask): {effective_static_folder}")
+        static_folder = os.path.join(os.path.dirname(__file__), 'frontend', 'build')
 
-        index_html_full_path = os.path.join(effective_static_folder, 'index.html')
-        print(f"Expected index.html full path: {index_html_full_path}")
-        print(f"Does index.html exist at that path according to os.path.exists? {os.path.exists(index_html_full_path)}")
-
-        # Case 1: Root path requested (path is None, e.g., GET /)
-        if path is None:
-            print(f"Path is None (root '/'). Attempting to serve index.html.")
-            if not os.path.exists(index_html_full_path):
-                print(f"CRITICAL ERROR: index.html not found at {index_html_full_path} when serving root.")
-                return jsonify(message="Application critical error: Main page not found."), 500 # Or 404
-            return send_from_directory(effective_static_folder, 'index.html')
-
-        # Case 2: A specific path is requested (e.g., /favicon.ico, /assets/main.js, or a client-side route like /profile)
-        specific_file_full_path = os.path.join(effective_static_folder, path)
-        print(f"Specific path requested: '{path}'. Checking for file: {specific_file_full_path}")
-        
-        # Check if the specific file exists and is not a directory
-        if os.path.exists(specific_file_full_path) and not os.path.isdir(specific_file_full_path):
-            print(f"File '{path}' found in static folder. Attempting to serve it directly.")
-            return send_from_directory(effective_static_folder, path)
+        if path and os.path.exists(os.path.join(static_folder, path)):
+            # If the path exists as a file in the static folder, serve it directly
+            return send_from_directory(static_folder, path)
         else:
-            # If the specific file/asset is not found, or if the path is for client-side routing, serve index.html.
-            print(f"File '{path}' not found or is a directory in static folder. Fallback: attempting to serve index.html.")
-            if not os.path.exists(index_html_full_path):
-                 print(f"CRITICAL ERROR: index.html not found at {index_html_full_path} when serving as fallback for path '{path}'.")
-                 return jsonify(message=f"Application not found (index.html missing for path: {path})"), 404
-            return send_from_directory(effective_static_folder, 'index.html')
+            # Otherwise, serve the index.html (for client-side routing)
+            # This handles cases like /profile, /settings, etc., which are React routes
+            index_path = os.path.join(static_folder, 'index.html')
+            if os.path.exists(index_path):
+                return send_from_directory(static_folder, 'index.html')
+            else:
+                # Fallback if index.html is somehow missing
+                return jsonify({"error": "React app not found. Build the frontend first."}), 404
+
+    @app.route('/privacy')
+    def privacy_policy():
+        return render_template('privacy.html')
 
     # --- Ampersounds Routes ---
 
