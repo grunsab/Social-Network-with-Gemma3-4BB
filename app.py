@@ -860,7 +860,7 @@ def personalized_feed():
             filtered_posts.append(post)
 
     # Add pagination later if needed
-    return render_template('feed.html', posts=filtered_posts, interests=interested_categories)
+    return render_template('feed.html', posts=filtered_posts, interests=interested_categories, PostPrivacy=PostPrivacy)
 
 # --- Comment Routes ---
 @app.route('/post/<int:post_id>/comments', methods=['GET', 'POST'])
