@@ -256,9 +256,13 @@ class GemmaClassification:
 
 # --- Application Factory ---
 def create_app(config_name='default'):
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print("!!! DEBUG: create_app FUNCTION CALLED    !!!")
+    print(f"!!! DEBUG: config_name = {config_name}        !!!")
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     # Determine configuration type
     config_name = os.getenv('FLASK_CONFIG', config_name) # Allow overriding via environment variable
-    app = Flask(__name__, static_folder='frontend/dist', static_url_path='') # Corrected static folder path
+    app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
 
     # Load configuration from the selected class
     app.config.from_object(config[config_name])
@@ -359,8 +363,9 @@ def create_app(config_name='default'):
         # Ensure os is available (it's imported at the top of app.py)
         # Ensure send_from_directory is available (imported from flask at the top)
         
-        print(f"--- SERVE_REACT_APP CALLED ---")
-        print(f"Requested path: {path}")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"--- DEBUG: SERVE_REACT_APP CALLED WITH PATH: {path} ---")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         
         # 'app' is the Flask instance from the create_app scope
         effective_static_folder = app.static_folder
@@ -374,7 +379,8 @@ def create_app(config_name='default'):
         if path is None:
             print(f"Path is None (root '/'). Attempting to serve index.html.")
             if not os.path.exists(index_html_full_path):
-                print(f"ERROR: index.html not found at {index_html_full_path} when serving root.")
+                print(f"CRITICAL ERROR: index.html not found at {index_html_full_path} when serving root.")
+                return jsonify(message="Application critical error: Main page not found."), 500 # Or 404
             return send_from_directory(effective_static_folder, 'index.html')
 
         # Case 2: A specific path is requested (e.g., /favicon.ico, /assets/main.js, or a client-side route like /profile)
@@ -389,7 +395,8 @@ def create_app(config_name='default'):
             # If the specific file/asset is not found, or if the path is for client-side routing, serve index.html.
             print(f"File '{path}' not found or is a directory in static folder. Fallback: attempting to serve index.html.")
             if not os.path.exists(index_html_full_path):
-                 print(f"ERROR: index.html not found at {index_html_full_path} when serving as fallback for path '{path}'.")
+                 print(f"CRITICAL ERROR: index.html not found at {index_html_full_path} when serving as fallback for path '{path}'.")
+                 return jsonify(message=f"Application not found (index.html missing for path: {path})"), 404
             return send_from_directory(effective_static_folder, 'index.html')
 
 
