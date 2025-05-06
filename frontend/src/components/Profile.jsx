@@ -210,8 +210,8 @@ function Profile() {
     }
 
     try {
-        // Fetch URL and increment count (backend handles increment)
-        const response = await fetch(`/ampersounds/${sound.user.username}/${sound.name}`, {
+        // Fetch URL and increment count
+        const response = await fetch(`/ampersounds/${username}/${sound.name}`, {
              credentials: 'include'
         });
          if (!response.ok) {
