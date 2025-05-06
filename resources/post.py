@@ -58,7 +58,7 @@ class PostListResource(Resource):
 
         # Access app context items
         s3_client = current_app.config.get('S3_CLIENT') # Assume s3_client is stored in app config or context
-        gemma_classification = current_app.config.get('GEMMA_CLASSIFICATION') # Same assumption
+        gemma_classification = current_app.config.get('GEMMA_CLASSIFIER') # Same assumption
         s3_bucket = current_app.config.get('S3_BUCKET')
         domain_name_images = current_app.config.get('DOMAIN_NAME_IMAGES')
 

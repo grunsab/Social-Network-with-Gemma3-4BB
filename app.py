@@ -182,12 +182,12 @@ class GemmaClassification:
             except json.JSONDecodeError as je:
                 print(f"ERROR: Failed to parse JSON response: {je}")
                 print(f"Raw response: {self.response_content}")
-                return None
+                return {}
 
             # Basic validation
             if not isinstance(self.category_scores, dict):
                 print(f"ERROR: Classification result is not a dictionary: {type(self.category_scores)}")
-                return None
+                return {}
             
             validated_scores = {}
             for category, score in self.category_scores.items():
@@ -258,7 +258,7 @@ class GemmaClassification:
 def create_app(config_name='default'):
     # Determine configuration type
     config_name = os.getenv('FLASK_CONFIG', config_name) # Allow overriding via environment variable
-    app = Flask(__name__, static_folder='../frontend/dist', static_url_path='') # Adjusted static folder path
+    app = Flask(__name__, static_folder='frontend/dist', static_url_path='') # Corrected static folder path
 
     # Load configuration from the selected class
     app.config.from_object(config[config_name])
@@ -356,17 +356,41 @@ def create_app(config_name='default'):
     @app.route('/')
     @app.route('/<path:path>')
     def serve_react_app(path=None): # Optional path parameter
-        # If the path is None (root) or doesn't point to an existing static file...
-        if path is None or not os.path.exists(os.path.join(app.static_folder, path)):
-             # ... serve the main index.html for client-side routing
-             return send_from_directory(app.static_folder, 'index.html')
+        # Ensure os is available (it's imported at the top of app.py)
+        # Ensure send_from_directory is available (imported from flask at the top)
+        
+        print(f"--- SERVE_REACT_APP CALLED ---")
+        print(f"Requested path: {path}")
+        
+        # 'app' is the Flask instance from the create_app scope
+        effective_static_folder = app.static_folder
+        print(f"app.static_folder (resolved by Flask): {effective_static_folder}")
+
+        index_html_full_path = os.path.join(effective_static_folder, 'index.html')
+        print(f"Expected index.html full path: {index_html_full_path}")
+        print(f"Does index.html exist at that path according to os.path.exists? {os.path.exists(index_html_full_path)}")
+
+        # Case 1: Root path requested (path is None, e.g., GET /)
+        if path is None:
+            print(f"Path is None (root '/'). Attempting to serve index.html.")
+            if not os.path.exists(index_html_full_path):
+                print(f"ERROR: index.html not found at {index_html_full_path} when serving root.")
+            return send_from_directory(effective_static_folder, 'index.html')
+
+        # Case 2: A specific path is requested (e.g., /favicon.ico, /assets/main.js, or a client-side route like /profile)
+        specific_file_full_path = os.path.join(effective_static_folder, path)
+        print(f"Specific path requested: '{path}'. Checking for file: {specific_file_full_path}")
+        
+        # Check if the specific file exists and is not a directory
+        if os.path.exists(specific_file_full_path) and not os.path.isdir(specific_file_full_path):
+            print(f"File '{path}' found in static folder. Attempting to serve it directly.")
+            return send_from_directory(effective_static_folder, path)
         else:
-             # Otherwise, let Flask serve the static file (e.g., CSS, JS)
-             # This part is handled implicitly by Flask if the file exists
-             # in static_folder due to static_url_path='' configuration.
-             # We might not even need the else clause if static serving works correctly.
-             # However, explicitly calling send_from_directory can be clearer.
-             return send_from_directory(app.static_folder, path)
+            # If the specific file/asset is not found, or if the path is for client-side routing, serve index.html.
+            print(f"File '{path}' not found or is a directory in static folder. Fallback: attempting to serve index.html.")
+            if not os.path.exists(index_html_full_path):
+                 print(f"ERROR: index.html not found at {index_html_full_path} when serving as fallback for path '{path}'.")
+            return send_from_directory(effective_static_folder, 'index.html')
 
 
     # Add other blueprints or routes here if needed

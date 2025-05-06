@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import CreatePostForm from './CreatePostForm';
 import Post from './Post';
@@ -13,8 +13,9 @@ function Dashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [feedMessage, setFeedMessage] = useState('');
   const [initialLoad, setInitialLoad] = useState(true);
+  const observerTarget = useRef(null);
 
-  const fetchPosts = async (pageToFetch = 1, append = false) => {
+  const fetchPosts = useCallback(async (pageToFetch = 1, append = false) => {
     setLoadingPosts(true);
     setErrorPosts('');
     try {
@@ -37,7 +38,7 @@ function Dashboard() {
       setLoadingPosts(false);
       setInitialLoad(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -45,7 +46,7 @@ function Dashboard() {
       setInitialLoad(true);
       fetchPosts(1, false);
     }
-  }, [currentUser]);
+  }, [currentUser, fetchPosts]);
 
   const handlePostCreated = (newPost) => {
     console.log("New post created, prepending to feed:", newPost);
@@ -63,11 +64,33 @@ function Dashboard() {
     setPosts(prevPosts => prevPosts.filter(post => post.id !== deletedPostId));
   };
   
-  const loadMorePosts = () => {
+  const loadMorePosts = useCallback(() => {
     if (currentPage < totalPages && !loadingPosts) {
         fetchPosts(currentPage + 1, true);
     }
-  };
+  }, [currentPage, totalPages, loadingPosts, fetchPosts]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [loadMorePosts]);
 
   if (!currentUser) {
     return <p>Please log in to see the dashboard.</p>;
@@ -97,18 +120,16 @@ function Dashboard() {
       {/* Loading indicator for subsequent pages */}
       {loadingPosts && !initialLoad && <Spinner contained={true} />} 
       
-      {/* Load More Button */} 
+      {/* Observer Target for Infinite Scrolling */}
       {currentPage < totalPages && !loadingPosts && (
-          <div className="text-center my-2"> {/* Center the button */} 
-              <button onClick={loadMorePosts}>
-                  Load More
-              </button>
-          </div>
+        <div ref={observerTarget} style={{ height: '20px', margin: '20px' }} data-cy="feed-load-more-trigger">
+          {/* This div is the trigger for loading more posts. It can be styled as needed or remain invisible. */}
+        </div>
       )}
       
       {/* End of Feed message */}
       {!loadingPosts && posts.length > 0 && currentPage >= totalPages && (
-          <p className="text-center my-2" style={{ fontStyle: 'italic', opacity: 0.7 }}>End of feed.</p> // Keep inline style for unique properties
+          <p className="text-center my-2" style={{ fontStyle: 'italic', opacity: 0.7 }}>End of feed.</p>
       )}
     </>
   );

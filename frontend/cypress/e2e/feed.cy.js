@@ -235,24 +235,19 @@ describe('Feed Pagination', () => {
       cy.log('Initial Feed Total Pages:', interception.response.body.total_pages);
     });
     
-    cy.contains('button', 'Load More').should('be.visible');
+    // Ensure the load more trigger exists and end message is not yet visible
+    cy.get('[data-cy="feed-load-more-trigger"]').should('be.visible');
     cy.contains('p', 'End of feed.').should('not.exist');
 
     // Intercept the next page request
     cy.intercept('GET', '/api/v1/feed?page=2&per_page=10').as('loadPage2');
 
-    // Click Load More
-    cy.contains('button', 'Load More').click();
+    // Scroll to the trigger element to load more posts
+    cy.get('[data-cy="feed-load-more-trigger"]').scrollIntoView();
 
     // Verify API call and loading state (optional)
     // cy.get('.spinner').should('be.visible'); // Check for spinner
     // cy.wait('@loadPage2').its('response.statusCode').should('eq', 200);
-    // cy.wait('@loadPage2').then(interception => { // Wait again to access the response body
-    //   cy.log('Page 2 Feed Total Items:', interception.response.body.total_items);
-    //   cy.log('Page 2 Feed Total Pages:', interception.response.body.total_pages);
-    // });
-    
-    // Combined wait and check
     cy.wait('@loadPage2').then((interception) => {
         expect(interception.response.statusCode).to.eq(200);
         cy.log('Page 2 Feed Total Items:', interception.response.body.total_items);
@@ -264,8 +259,10 @@ describe('Feed Pagination', () => {
     // Verify total posts visible (expecting 12 now)
     cy.get('.posts-list .post:contains("Pagination Test Post")').should('have.length', totalPostsToCreate);
 
-    // Verify Load More button is gone
-    cy.contains('button', 'Load More').should('not.exist');
+    // Verify Load More trigger is gone (or not visible if it's removed from DOM when no more pages)
+    // Depending on implementation, it might still exist but not trigger more loads, or be removed.
+    // For now, let's assume it should not be visible if there are no more pages.
+    cy.get('[data-cy="feed-load-more-trigger"]').should('not.exist');
 
     // Verify End of feed message is visible
     cy.contains('p', 'End of feed.').should('be.visible');
