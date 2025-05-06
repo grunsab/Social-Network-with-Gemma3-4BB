@@ -248,8 +248,21 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
       {/* Post Header */}
       <div className="post-header">
           <Link to={`/profile/${post.author?.username}`} className="post-author-link">
-            {post.author?.username || 'Unknown User'}
+            <img 
+                src={post.author?.profile_picture || '/default-profile.png'} 
+                alt={post.author?.username || 'User'} 
+                className="post-author-img" 
+            />
+            <span className="post-author-username">{post.author?.username || 'Unknown User'}</span>
           </Link>
+          <span className="post-privacy">
+            {post.privacy === 'FRIENDS' && (
+              <span className="badge-friends-only" title="Friends Only"><i className="bi bi-people-fill"></i> Friends</span>
+            )}
+            {post.privacy === 'PUBLIC' && (
+              <span className="badge-public" title="Public"><i className="bi bi-globe"></i> Public</span>
+            )}
+          </span>
           <span className="post-timestamp">{new Date(post.timestamp).toLocaleString()}</span>
       </div>
 
