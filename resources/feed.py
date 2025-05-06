@@ -66,17 +66,13 @@ class FeedResource(Resource):
             # --- Fallback: Recent Posts (If no interests) ---
             message = "Showing recent posts. Explore more to personalize your feed!"
             print(f"DEBUG: User {current_user.id} - Taking FEED FALLBACK path", file=sys.stderr)
-            # Original filter excluded own posts. New filter includes them.
-            combined_filter = or_(
-                Post.user_id == current_user.id, # Own posts (all their privacy levels visible to them)
-                and_( # Other users' posts
-                    Post.user_id != current_user.id,
-                    or_(
-                        Post.privacy == PostPrivacy.PUBLIC, # Public posts from others
-                        and_(
-                            Post.privacy == PostPrivacy.FRIENDS, # Friends-only posts from friends
-                            Post.user_id.in_(friend_ids)
-                        )
+            combined_filter = and_(
+                Post.user_id != current_user.id,
+                or_(
+                    Post.privacy == PostPrivacy.PUBLIC,
+                    and_(
+                        Post.privacy == PostPrivacy.FRIENDS,
+                        Post.user_id.in_(friend_ids)
                     )
                 )
             )
@@ -106,27 +102,22 @@ class FeedResource(Resource):
             # Base query for calculating relevance of posts (Public or Friend's) not authored by current user
             relevance_base_query = db.session.query(
                 Post.id.label('post_id'),
-                # Use coalesce to handle potential null score if outer joins produce no match
                 func.coalesce(func.sum(
                     PostCategoryScore.score * user_interest_subq.c.score
                 ), 0).label('relevance_score'),
                 Post.timestamp.label('timestamp')
-            ).select_from(Post).outerjoin( # Changed to outerjoin
+            ).select_from(Post).outerjoin(
                 PostCategoryScore, Post.id == PostCategoryScore.post_id
-            ).outerjoin( # Changed to outerjoin
+            ).outerjoin(
                 user_interest_subq, PostCategoryScore.category == user_interest_subq.c.category
             ).filter(
-                # Apply the updated filter here too, to include own posts
-                or_(
-                    Post.user_id == current_user.id, # Own posts
-                    and_( # Other users' relevant posts
-                        Post.user_id != current_user.id,
-                        or_(
-                            Post.privacy == PostPrivacy.PUBLIC,
-                            and_(
-                                Post.privacy == PostPrivacy.FRIENDS,
-                                Post.user_id.in_(friend_ids)
-                            )
+                and_(
+                    Post.user_id != current_user.id,
+                    or_(
+                        Post.privacy == PostPrivacy.PUBLIC,
+                        and_(
+                            Post.privacy == PostPrivacy.FRIENDS,
+                            Post.user_id.in_(friend_ids)
                         )
                     )
                 )
@@ -139,13 +130,16 @@ class FeedResource(Resource):
             )
 
             # Get total count for pagination
-            # Need to count differently now because outer join might include posts 
-            # that don't actually match user interests. We should count based on the 
-            # visibility filter *before* the joins perhaps?
             # Let's recalculate total_items based on visibility filter only for pagination accuracy.
-            visibility_filter_for_count = or_(
-                Post.user_id == current_user.id,
-                and_(Post.user_id != current_user.id, or_(Post.privacy == PostPrivacy.PUBLIC, and_(Post.privacy == PostPrivacy.FRIENDS, Post.user_id.in_(friend_ids))))
+            visibility_filter_for_count = and_(
+                Post.user_id != current_user.id,
+                or_(
+                    Post.privacy == PostPrivacy.PUBLIC,
+                    and_(
+                        Post.privacy == PostPrivacy.FRIENDS,
+                        Post.user_id.in_(friend_ids)
+                    )
+                )
             )
             total_items = db.session.query(func.count(Post.id)).filter(visibility_filter_for_count).scalar()
             # total_items = ordered_relevance_query.count() # Old count might be inaccurate with outer join
