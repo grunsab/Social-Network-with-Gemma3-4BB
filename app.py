@@ -829,10 +829,11 @@ def personalized_feed():
         # Subquery to order and limit the combined results
         ordered_subquery = combined_query.order_by(
             desc('relevance_score'),
-            desc('timestamp') # Use the alias from the inner query
+            desc(combined_query.c.timestamp) # Use the column from the combined query selectable
         ).limit(50).subquery()
 
         # Get the ordered list of post IDs
+        # Query the 'post_id' column from the subquery
         ordered_post_ids = [item.post_id for item in db.session.query(ordered_subquery.c.post_id).all()]
 
         # --- Step 2: Fetch full Post objects for the selected IDs ---
