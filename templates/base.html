@@ -153,5 +153,8 @@
         document.addEventListener('DOMContentLoaded', formatLocalTimestamps);
     </script>
 
+    {# Define the block where child templates can add scripts #}
+    {% block scripts %}{% endblock %}
+
 </body>
 </html> 

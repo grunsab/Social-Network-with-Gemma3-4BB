@@ -98,16 +98,33 @@
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     // Render markdown for post content
+    console.log('Starting markdown rendering...'); // Debug: Log start
     const postContents = document.querySelectorAll('.post-content');
-    postContents.forEach(div => {
+    console.log(`Found ${postContents.length} post content divs.`); // Debug: Log count
+
+    postContents.forEach((div, index) => {
+      console.log(`Processing div #${index+1}:`, div); // Debug: Log current div
       const rawContent = div.getAttribute('data-raw-content');
+      console.log(` Raw content:`, rawContent); // Debug: Log raw content
+
       if (rawContent) {
-        // Configure marked to handle basic GFM line breaks
-        marked.setOptions({
-          breaks: true
-        });
-        // Use innerHTML as marked returns HTML string. Ensure content is properly escaped on server.
-        div.innerHTML = marked.parse(rawContent);
+        try {
+            // Configure marked to handle basic GFM line breaks
+            marked.setOptions({
+              breaks: true
+            });
+            console.log(' Calling marked.parse...'); // Debug: Log before parse
+            const htmlContent = marked.parse(rawContent);
+            console.log(` Parsed HTML:`, htmlContent); // Debug: Log parsed HTML
+            // Use innerHTML as marked returns HTML string. Ensure content is properly escaped on server.
+            div.innerHTML = htmlContent;
+            console.log(' innerHTML set.'); // Debug: Log after setting HTML
+        } catch (error) {
+            console.error('Error parsing markdown:', error, 'Raw content:', rawContent); // Debug: Log any error during parsing
+            div.innerHTML = '<p class="text-danger">Error rendering content.</p>'; // Show error in UI
+        }
+      } else {
+        console.warn(' Raw content is empty or null for div:', div); // Debug: Warn if no raw content
       }
     });
     

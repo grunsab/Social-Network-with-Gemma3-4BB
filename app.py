@@ -9,10 +9,10 @@ import json # Add json import
 import boto3 # Add boto3 import
 import uuid # Add uuid import
 import base64 # Add base64 import
-from sqlalchemy import or_, func, case, desc # Import 'or_' operator, func for SQL functions, case for conditional expressions, and desc for ordering
+from sqlalchemy import or_, func, case, desc, union_all # Import 'or_' operator, func for SQL functions, case for conditional expressions, desc for ordering, and union_all
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, undefer
 
 # Load blocked categories
 BLOCKED_CATEGORIES = set()
@@ -792,7 +792,7 @@ def personalized_feed():
             func.sum(
                 PostCategoryScore.score * user_interest_subq.c.score
             ).label('relevance_score'),
-            Post.timestamp
+            Post.timestamp.label('timestamp')
         ).join(
             PostCategoryScore, Post.id == PostCategoryScore.post_id
         ).join(
@@ -807,7 +807,7 @@ def personalized_feed():
             func.sum(
                 PostCategoryScore.score * user_interest_subq.c.score
             ).label('relevance_score'),
-            Post.timestamp
+            Post.timestamp.label('timestamp')
         ).join(
             FriendRequest,
             (
@@ -824,9 +824,11 @@ def personalized_feed():
             Post.user_id != current_user.id
         ).group_by(Post.id, Post.timestamp)
 
-        combined_query = public_base_query.union_all(friends_base_query)
+        # Pass base queries directly to union_all
+        # combined_query = union_all(public_base_query.subquery('public_sq'), friends_base_query.subquery('friends_sq')) # Incorrect per error
+        combined_query = union_all(public_base_query, friends_base_query)
 
-        # Alias the combined query to make it a selectable for ordering
+        # Alias the combined query result (which is now a CompoundSelect)
         combined_alias = combined_query.alias('combined_results')
 
         # Query from the alias, order, and limit to get the final ranked IDs + scores
@@ -846,12 +848,13 @@ def personalized_feed():
             # Fetch posts using the ordered IDs, loading necessary relationships
             posts_map = {
                 p.id: p for p in Post.query
+                    .filter(Post.id.in_(ordered_post_ids))
                     .options(
                         joinedload(Post.author),
-                        joinedload(Post.category_scores) # Needed for blocking filter
+                        joinedload(Post.category_scores), # Needed for blocking filter
+                        undefer(Post.content) # Explicitly load content
                         # joinedload(Post.comments) # Load comments if displayed on feed
                     )
-                    .filter(Post.id.in_(ordered_post_ids))
                     .all()
             }
             # Reconstruct the list in the correct order determined by the relevance query
@@ -894,11 +897,12 @@ def personalized_feed():
                 # Fetch full Post objects for these additional IDs
                 additional_posts_map = {
                     p.id: p for p in Post.query
+                        .filter(Post.id.in_(additional_ids))
                         .options(
                             joinedload(Post.author),
-                            joinedload(Post.category_scores)
+                            joinedload(Post.category_scores),
+                            undefer(Post.content) # Explicitly load content
                         )
-                        .filter(Post.id.in_(additional_ids))
                         .all()
                 }
                 # Append fetched posts in the determined order
