@@ -397,14 +397,22 @@ def create_app(config_name='default'):
 
     return app
 
-# --- Create app instance for running/debugging (outside the factory) ---
-# You would typically use a run.py script or flask run command
-# which imports and calls create_app()
-# For simple execution (e.g., python app.py), you can do this:
+# Create app instance for Gunicorn/WSGI server
+# FLASK_CONFIG should be 'production' in the Heroku environment.
+# If FLASK_CONFIG is not set, it defaults to 'production' here.
+application = create_app(os.getenv('FLASK_CONFIG', 'production'))
+
 if __name__ == '__main__':
-    app = create_app(os.getenv('FLASK_CONFIG') or 'default')
-    # Add host='0.0.0.0' to run on network if needed
-    app.run(debug=app.config['DEBUG'])
+    # When running directly (e.g., python app.py), use 'default' (DevelopmentConfig)
+    # if FLASK_CONFIG is not set. This allows easy local development.
+    # The 'PORT' env var is used by Heroku, so it's good to include.
+    # Host '0.0.0.0' is also good practice for containerized environments.
+    config_name_for_run = os.getenv('FLASK_CONFIG') or 'default'
+    app_for_run = create_app(config_name_for_run)
+    # Heroku dynamically assigns a port, so use PORT environment variable.
+    # Default to 5000 for local development if PORT is not set.
+    port = int(os.environ.get("PORT", 5000))
+    app_for_run.run(debug=app_for_run.config['DEBUG'], host='0.0.0.0', port=port)
 
 
 # Remove old app instantiation and config loading that's now inside create_app
