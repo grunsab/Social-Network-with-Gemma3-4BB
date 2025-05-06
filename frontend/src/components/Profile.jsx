@@ -15,6 +15,11 @@ function Profile() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false); // Loading state for friend actions
 
+  // State for profile picture upload
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
   // State for user's ampersounds
   const [myAmpersounds, setMyAmpersounds] = useState([]);
   const [loadingAmpersounds, setLoadingAmpersounds] = useState(false);
@@ -91,6 +96,58 @@ function Profile() {
         }
     };
   }, [currentlyPlaying]);
+
+  // --- Profile Picture Upload Handler ---
+  const handleFileChange = (event) => {
+    setSelectedFile(event.target.files[0]);
+    setUploadError(''); // Clear previous upload error
+  };
+
+  const handlePictureUpload = async () => {
+    if (!selectedFile) {
+        setUploadError('Please select a file to upload.');
+        return;
+    }
+    if (profileData && profileData.friendship_status !== 'SELF') return; // Should not happen if button is hidden
+
+    setUploading(true);
+    setUploadError('');
+    setError(''); // Clear general profile errors
+
+    const formData = new FormData();
+    formData.append('profile_picture', selectedFile);
+
+    try {
+        const response = await fetch('/api/v1/profiles/me', { // Endpoint for current user's profile
+            method: 'PATCH',
+            body: formData,
+            // Headers are not 'Content-Type': 'application/json' for FormData
+            // The browser will set it correctly with boundary for multipart/form-data
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to upload profile picture.');
+        }
+
+        // Update profile data with the new picture URL
+        setProfileData(prevData => ({
+            ...prevData,
+            user: { ...prevData.user, profile_picture: data.user.profile_picture }
+        }));
+        setSelectedFile(null); // Clear selected file
+        console.log('Profile picture updated successfully:', data.user.profile_picture);
+
+    } catch (err) {
+        console.error("Error uploading profile picture:", err);
+        setUploadError(err.message || 'Could not upload picture.');
+        // Optionally, refetch profile to ensure consistency if backend doesn't return full updated profile
+        // fetchProfile(); 
+    } finally {
+        setUploading(false);
+    }
+  };
 
   // --- Friendship Action Handlers ---
   const handleFriendAction = async (actionType, endpoint, method, body = null) => {
@@ -289,13 +346,30 @@ function Profile() {
     <div className="profile-container"> 
       {/* Profile Header section */}
       <div className="profile-header">
-        {user.profile_picture && 
-          <img 
-            src={user.profile_picture} 
-            alt={`${user.username}'s profile`} 
-            className="profile-picture" // Apply class
-          />
-        }
+        <div className="profile-picture-container">
+          {user.profile_picture ? 
+            <img 
+              src={user.profile_picture} 
+              alt={`${user.username}'s profile`} 
+              className="profile-picture" // Apply class
+            />
+            : 
+            <div className="profile-picture-placeholder">No Pic</div>
+          }
+          {friendship_status === 'SELF' && (
+            <div className="profile-picture-upload">
+              <input type="file" accept="image/*" onChange={handleFileChange} id="profilePicInput" style={{display: 'none'}} />
+              <label htmlFor="profilePicInput" className="upload-button">
+                {selectedFile ? 'Change' : 'Upload'}
+              </label>
+              {selectedFile && 
+                <button onClick={handlePictureUpload} disabled={uploading} className="confirm-upload-button">
+                  {uploading ? <Spinner inline={true} size="small" /> : 'Confirm'}
+                </button>
+              }
+            </div>
+          )}
+        </div>
         <div className="profile-info"> {/* Wrapper for text info */}
             <h2 className="profile-username">{user.username}</h2>
             <div className="profile-details"> {/* Wrapper for details */}
@@ -310,6 +384,8 @@ function Profile() {
                {actionLoading && <Spinner inline={true} />} {/* Use inline spinner for actions */} 
                {/* Use error-message class */} 
                {actionError && <p className="error-message">{actionError}</p>} 
+               {/* Display Upload Error */} 
+               {uploadError && friendship_status === 'SELF' && <p className="error-message">{uploadError}</p>} 
             </div>
         </div>
       </div>

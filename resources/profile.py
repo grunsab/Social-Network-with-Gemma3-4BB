@@ -2,8 +2,18 @@ from flask import current_app, request
 from flask_restful import Resource, fields, marshal_with, abort, reqparse
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
+from werkzeug.datastructures import FileStorage # Added for file uploads
+import os # Added for file operations
 
 from models import db, User, Post, UserInterest, PostPrivacy, FriendRequest, FriendRequestStatus # Added FriendRequest
+
+# Define the upload folder for profile pictures
+UPLOAD_FOLDER = 'uploads/profile_pics'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- Field Definitions for Marshaling ---
 # Re-use author_fields if defined elsewhere or define similar user fields
@@ -51,6 +61,7 @@ profile_data_fields = {
 profile_patch_parser = reqparse.RequestParser()
 profile_patch_parser.add_argument('invites_left', type=int, location='json', help='Number of invites left (optional)')
 # Add other editable fields here later if needed (e.g., email, profile_picture)
+profile_patch_parser.add_argument('profile_picture', type=FileStorage, location='files', help='Profile picture to upload (optional)')
 
 class ProfileResource(Resource):
     @login_required
@@ -185,6 +196,33 @@ class MyProfileResource(Resource):
             current_user.invites_left = args['invites_left']
             user_updated = True
             print(f"INFO: Resetting invites for {current_user.username} to {args['invites_left']}")
+
+        # Handle profile picture upload
+        profile_pic_file = args['profile_picture']
+        if profile_pic_file:
+            if allowed_file(profile_pic_file.filename):
+                # Ensure the upload folder exists
+                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                
+                # Create a secure filename (e.g., using user_id and extension)
+                # For simplicity, using username here, but consider user_id for more robustness
+                filename = f"{current_user.username}.{profile_pic_file.filename.rsplit('.', 1)[1].lower()}"
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                
+                try:
+                    profile_pic_file.save(filepath)
+                    # Store the relative path or full URL depending on your setup
+                    # Assuming static files are served from '/static' which maps to 'uploads' directory at root
+                    # or directly from 'uploads' if your server is configured that way.
+                    # For this example, let's assume a '/uploads/profile_pics/' URL path.
+                    current_user.profile_picture = f"/{filepath}" # Store the path
+                    user_updated = True
+                    print(f"INFO: User {current_user.username} uploaded new profile picture: {filepath}")
+                except Exception as e:
+                    current_app.logger.error(f"Failed to save profile picture for user {current_user.id}: {e}", exc_info=True)
+                    abort(500, message="Could not save profile picture. Server error during file save.")
+            else:
+                abort(400, message="Invalid file type for profile picture.")
 
         # Add logic for other editable fields here from parser...
         # if args['email']:
