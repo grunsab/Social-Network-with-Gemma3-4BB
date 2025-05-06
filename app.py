@@ -12,6 +12,19 @@ import base64 # Add base64 import
 from sqlalchemy import or_, func, case, desc # Import 'or_' operator, func for SQL functions, case for conditional expressions, and desc for ordering
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
+from sqlalchemy.orm import joinedload
+
+# Load blocked categories
+BLOCKED_CATEGORIES = set()
+blocked_categories_path = os.path.join(os.path.dirname(__file__), 'blocked_categories.json')
+try:
+    with open(blocked_categories_path, 'r') as f:
+        BLOCKED_CATEGORIES = set(json.load(f))
+    print(f"INFO: Loaded {len(BLOCKED_CATEGORIES)} blocked categories: {BLOCKED_CATEGORIES}")
+except FileNotFoundError:
+    print(f"WARN: blocked_categories.json not found at {blocked_categories_path}. No categories will be blocked.")
+except json.JSONDecodeError:
+    print(f"ERROR: Could not decode JSON from {blocked_categories_path}. No categories will be blocked.")
 
 load_dotenv()
 
@@ -228,9 +241,17 @@ def index():
     own_posts_query = Post.query.filter_by(user_id=current_user.id)
     
     # Union all queries and order by timestamp
-    posts = public_posts_query.union_all(friends_only_posts_query, own_posts_query).order_by(Post.timestamp.desc()).all()
+    posts_query = public_posts_query.union_all(friends_only_posts_query, own_posts_query)
+    all_posts_unfiltered = posts_query.order_by(Post.timestamp.desc()).all()
     
-    return render_template('index.html', posts=posts)
+    # Filter out posts with blocked categories
+    filtered_posts = []
+    for post in all_posts_unfiltered:
+        post_categories = {score.category for score in post.category_scores}
+        if not post_categories.intersection(BLOCKED_CATEGORIES):
+            filtered_posts.append(post)
+    
+    return render_template('index.html', posts=filtered_posts)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -831,8 +852,15 @@ def personalized_feed():
             posts.extend(recent_public_posts)
             posts.extend(recent_friends_posts)
 
-    # We no longer need to sort in Python - it's handled by the SQL query
-    return render_template('index.html', posts=posts, feed_type="Personalized")
+    # Filter out posts with blocked categories
+    filtered_posts = []
+    for post in posts:
+        post_categories = {score.category for score in post.category_scores}
+        if not post_categories.intersection(BLOCKED_CATEGORIES):
+            filtered_posts.append(post)
+
+    # Add pagination later if needed
+    return render_template('feed.html', posts=filtered_posts, interests=interested_categories)
 
 # --- Comment Routes ---
 @app.route('/post/<int:post_id>/comments', methods=['GET', 'POST'])
