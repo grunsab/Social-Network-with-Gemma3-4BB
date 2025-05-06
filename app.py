@@ -826,15 +826,20 @@ def personalized_feed():
 
         combined_query = public_base_query.union_all(friends_base_query)
 
-        # Subquery to order and limit the combined results
-        ordered_subquery = combined_query.order_by(
-            desc('relevance_score'),
-            desc(combined_query.c.timestamp) # Use the column from the combined query selectable
-        ).limit(50).subquery()
+        # Alias the combined query to make it a selectable for ordering
+        combined_alias = combined_query.alias('combined_results')
+
+        # Query from the alias, order, and limit to get the final ranked IDs + scores
+        ordered_query = db.session.query(
+            combined_alias.c.post_id,
+            # combined_alias.c.relevance_score # Keep score if needed for debugging/thresholding
+        ).order_by(
+            desc(combined_alias.c.relevance_score),
+            desc(combined_alias.c.timestamp)
+        ).limit(50)
 
         # Get the ordered list of post IDs
-        # Query the 'post_id' column from the subquery
-        ordered_post_ids = [item.post_id for item in db.session.query(ordered_subquery.c.post_id).all()]
+        ordered_post_ids = [item.post_id for item in ordered_query.all()]
 
         # --- Step 2: Fetch full Post objects for the selected IDs ---
         if ordered_post_ids:
