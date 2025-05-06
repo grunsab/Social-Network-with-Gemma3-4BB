@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom'; // For linking to user profiles
 import Spinner from './Spinner';
+import { FaPlay, FaPause } from 'react-icons/fa'; // Import Play/Pause icons
 // You might want a specific CSS file for this page later
 // import './PopularAmpersoundsPage.css';
 
@@ -8,11 +9,24 @@ const PopularAmpersoundsPage = () => {
     const [ampersounds, setAmpersounds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [playbackError, setPlaybackError] = useState(''); // Specific error for playback
+    const [currentlyPlaying, setCurrentlyPlaying] = useState(null); // { id: soundId, audio: audioObject }
+    const [loadingSound, setLoadingSound] = useState(null); // Track which sound is loading
+
+    // Cleanup audio on unmount
+    useEffect(() => {
+        return () => {
+            if (currentlyPlaying?.audio) {
+                currentlyPlaying.audio.pause();
+            }
+        };
+    }, [currentlyPlaying]);
 
     useEffect(() => {
         const fetchPopularAmpersounds = async () => {
             setLoading(true);
             setError('');
+            setPlaybackError('');
             try {
                 // Credentials needed if this endpoint ever becomes protected,
                 // but for a public listing, it might not be.
@@ -37,18 +51,97 @@ const PopularAmpersoundsPage = () => {
         fetchPopularAmpersounds();
     }, []);
 
+    const handlePlayToggle = async (sound) => {
+        setPlaybackError('');
+        setLoadingSound(sound.id); // Indicate loading for this sound
+
+        // If this sound is already playing, pause it
+        if (currentlyPlaying?.id === sound.id) {
+            currentlyPlaying.audio.pause();
+            setCurrentlyPlaying(null);
+            setLoadingSound(null);
+            return;
+        }
+
+        // If another sound is playing, pause it first
+        if (currentlyPlaying?.audio) {
+            currentlyPlaying.audio.pause();
+            setCurrentlyPlaying(null); // Clear previous
+        }
+
+        try {
+            // Fetch the sound URL AND increment count via the backend endpoint
+            const response = await fetch(`/ampersounds/${sound.user.username}/${sound.name}`, {
+                 credentials: 'include'
+            });
+             if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || `Could not fetch &${sound.name}`);
+            }
+            const data = await response.json();
+
+            if (data.url) {
+                // Update the play count in the local state immediately
+                setAmpersounds(prevSounds => prevSounds.map(s => 
+                    s.id === sound.id ? { ...s, play_count: data.play_count ?? s.play_count } : s
+                ));
+
+                // Play the audio
+                const audio = new Audio(data.url);
+                setCurrentlyPlaying({ id: sound.id, audio: audio });
+                
+                audio.play().catch(playError => {
+                    console.error("Error playing audio:", playError);
+                    setPlaybackError(`Could not play &${sound.name}: ${playError.message}`);
+                    setCurrentlyPlaying(null); // Clear playing state on error
+                });
+
+                // Add event listener to clear playing state when audio finishes
+                audio.onended = () => {
+                    setCurrentlyPlaying(null);
+                };
+
+            } else {
+                 throw new Error('Audio URL not found in response.');
+            }
+
+        } catch (err) {
+            console.error(`Error playing &${sound.name}:`, err);
+            setPlaybackError(`Error playing &${sound.name}: ${err.message}`);
+            setCurrentlyPlaying(null);
+        } finally {
+            setLoadingSound(null); // Stop loading indicator for this sound
+        }
+    };
+
     if (loading) return <Spinner contained={true} />;
     if (error) return <p className="error-message">Error: {error}</p>;
 
     return (
         <div className="popular-ampersounds-page card"> {/* Using card class for basic styling */}
             <h2>Popular Ampersounds (Most Played First)</h2>
+            {playbackError && <p className="error-message">Playback Error: {playbackError}</p>}
             {ampersounds.length === 0 ? (
                 <p>No ampersounds to display at the moment.</p>
             ) : (
                 <ul className="ampersound-list"> {/* Re-use class from Profile.css or create new ones */}
                     {ampersounds.map(sound => (
                         <li key={sound.id} className="ampersound-list-item">
+                            {/* Play/Pause Button */} 
+                            <button 
+                                onClick={() => handlePlayToggle(sound)}
+                                className={`ampersound-play-button icon-button ${currentlyPlaying?.id === sound.id ? 'playing' : ''}`}
+                                disabled={loadingSound === sound.id} // Disable while loading this sound
+                                title={currentlyPlaying?.id === sound.id ? `Pause &${sound.name}` : `Play &${sound.name}`}
+                            >
+                                {loadingSound === sound.id ? (
+                                    <Spinner inline={true} size="small" />
+                                ) : currentlyPlaying?.id === sound.id ? (
+                                    <FaPause /> 
+                                ) : (
+                                    <FaPlay />
+                                )}
+                            </button>
                             <div className="ampersound-info">
                                 <span className="ampersound-name">&{sound.name}</span>
                                 <span className="ampersound-author"> by 
@@ -61,7 +154,6 @@ const PopularAmpersoundsPage = () => {
                                      - {sound.play_count ?? 0} plays
                                 </span>
                             </div>
-                            {sound.url && <audio controls src={sound.url} className="ampersound-audio-player"></audio>}
                         </li>
                     ))}
                 </ul>

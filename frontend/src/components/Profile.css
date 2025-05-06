@@ -167,45 +167,71 @@
     padding: 0;
 }
 
-/* Ampersound List Item Layout */
+/* Ampersound List Item Layout Adjustments */
 .ampersound-list-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 12px 0; /* Slightly more padding */
+    justify-content: space-between; /* Pushes button(s) to the right */
+    padding: 12px 0;
     border-bottom: 1px solid var(--border-color-dark);
-    gap: 15px; /* Add gap between info and button */
+    gap: 10px; /* Consistent gap */
 }
 
 .ampersound-item-info {
     display: flex;
     align-items: center;
-    flex-wrap: wrap; /* Allow wrapping within the info section */
-    gap: 10px; /* Space between name, player, count */
-    flex-grow: 1; /* Allow info section to take available space */
+    flex-wrap: wrap; 
+    gap: 8px 12px; /* Row and column gap for wrapped items */
+    flex-grow: 1; 
+    margin-right: 10px; /* Space before action buttons */
 }
 
-.ampersound-name {
-    font-weight: bold;
+/* Container for action buttons (Play/Delete) */
+.ampersound-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between play/delete buttons if both present */
+    flex-shrink: 0; /* Prevent buttons from shrinking */
+}
+
+/* Styling for the Play/Pause button */
+.ampersound-play-button {
+    padding: 5px 8px; 
+    background-color: transparent;
+    color: var(--primary-color); /* Use primary theme color */
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    line-height: 1; 
+}
+
+.ampersound-play-button:hover {
+    background-color: rgba(45, 212, 191, 0.1); /* Primary color with alpha */
     color: var(--primary-color);
-    margin-right: 5px; /* Reduced margin */
-    white-space: nowrap; /* Prevent name from wrapping */
 }
 
-.ampersound-audio-player {
-    height: 35px; /* More compact player */
-    max-width: 220px; 
-    vertical-align: middle;
+.ampersound-play-button.playing {
+    background-color: var(--primary-color);
+    color: var(--background-color-dark); /* Dark text on primary background */
+}
+.ampersound-play-button.playing:hover {
+    background-color: var(--primary-hover-color);
 }
 
-.ampersound-play-count {
-    font-size: 0.85em;
-    color: var(--text-color-dark);
-    opacity: 0.7;
-    white-space: nowrap;
+.ampersound-play-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent; 
 }
 
-/* Styling for the delete button */
+.ampersound-play-button svg {
+    width: 0.9em; 
+    height: 0.9em;
+    vertical-align: middle; 
+}
+
+/* Adjust delete button slightly if needed */
 .ampersound-delete-button {
     padding: 5px 8px; /* Smaller padding for icon button */
     background-color: transparent; /* Make background transparent */
@@ -238,17 +264,13 @@
 /* Responsive adjustments */
 @media (max-width: 600px) {
     .ampersound-list-item {
-        flex-direction: row; /* Keep as row but allow wrapping internally */
-        align-items: center; /* Center items vertically in row */
+        /* Keep as row, rely on internal wrapping */
     }
     .ampersound-item-info {
-       flex-basis: 80%; /* Allow info to take most width */
+       /* flex-basis: 70%;  Maybe not needed if relying on flex-grow */
+       margin-right: 5px; /* Reduce space */
     }
-    .ampersound-delete-button {
-        flex-basis: 15%; /* Assign some basis to button */
-        align-self: center; /* Center button vertically */
-    }
-    .ampersound-audio-player {
-        /* max-width: 100%; (already set) */
+    .ampersound-item-actions {
+       /* flex-basis: 25%; */
     }
 } 
