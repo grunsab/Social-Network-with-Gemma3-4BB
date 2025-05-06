@@ -11,6 +11,9 @@ from sqlalchemy.orm import joinedload, undefer
 from dotenv import load_dotenv
 import boto3
 from openai import OpenAI
+import mimetypes
+from werkzeug.utils import secure_filename
+import re # Import regular expression module
 
 # Import extensions and models AFTER defining configurations
 from extensions import db, login_manager, migrate
@@ -18,7 +21,7 @@ from extensions import db, login_manager, migrate
 # If models.py imports 'app', this needs further adjustment.
 # Corrected imports: Use InviteCode instead of Invite.
 # Removed Profile, Friendship, and Category as they don't exist as distinct models.
-from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy
+from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy, Ampersound
 
 # Import Resources AFTER defining configurations and extensions
 from resources.auth import UserRegistration, UserLogin
@@ -257,11 +260,9 @@ class GemmaClassification:
 # --- Application Factory ---
 def create_app(config_name='default'):
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    print("!!! DEBUG: create_app FUNCTION CALLED    !!!")
+    print(f"!!! DEBUG: create_app FUNCTION CALLED    !!!")
     print(f"!!! DEBUG: config_name = {config_name}        !!!")
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    # Determine configuration type
-    config_name = os.getenv('FLASK_CONFIG', config_name) # Allow overriding via environment variable
     app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
 
     # Load configuration from the selected class
@@ -286,6 +287,7 @@ def create_app(config_name='default'):
         return jsonify(message="Authentication required."), 401
 
     # Initialize S3 client if config is present
+    s3_client = None
     if app.config['S3_BUCKET'] and app.config['S3_KEY'] and app.config['S3_SECRET']:
         s3_client = boto3.client('s3',
             endpoint_url=app.config['S3_ENDPOINT_URL'],
@@ -399,8 +401,173 @@ def create_app(config_name='default'):
                  return jsonify(message=f"Application not found (index.html missing for path: {path})"), 404
             return send_from_directory(effective_static_folder, 'index.html')
 
+    # --- Ampersounds Routes ---
 
-    # Add other blueprints or routes here if needed
+    @app.route('/api/v1/ampersounds', methods=['POST'])
+    @login_required
+    def create_ampersound():
+        if 'audio_file' not in request.files:
+            return jsonify({"message": "No audio file part"}), 400
+        file = request.files['audio_file']
+        name = request.form.get('name')
+
+        if not name:
+            return jsonify({"message": "Ampersound name is required"}), 400
+        
+        # Validate name (simple validation for now: alphanumeric, no spaces)
+        # The name will be used in URLs and as a tag, so keep it simple.
+        clean_name = secure_filename(name).lower() # basic sanitization
+        if not clean_name or clean_name != name.lower() or '&' in clean_name or ' ' in clean_name:
+            return jsonify({"message": "Invalid Ampersound name. Use alphanumeric characters without spaces or '&'."}), 400
+
+        if file.filename == '':
+            return jsonify({"message": "No selected file"}), 400
+
+        # Check if an ampersound with this name already exists for the user
+        existing_ampersound = Ampersound.query.filter_by(user_id=current_user.id, name=clean_name).first()
+        if existing_ampersound:
+            return jsonify({"message": f"You already have an Ampersound named '{clean_name}'."}), 409 # Conflict
+
+        if file and s3_client:
+            filename = secure_filename(file.filename)
+            # Try to guess extension, default to .mp3 or .wav if not found
+            content_type = file.mimetype
+            extension = mimetypes.guess_extension(content_type)
+            if not extension:
+                # Fallback for common audio types if mimetypes fails or is too generic (e.g. application/octet-stream)
+                if 'webm' in content_type:
+                    extension = '.webm'
+                elif 'wav' in content_type:
+                    extension = '.wav'
+                elif 'ogg' in content_type:
+                    extension = '.ogg'
+                else:
+                    extension = '.mp3' # Default fallback
+            
+            s3_filename = f"ampersounds/{current_user.id}/{clean_name}{extension}"
+            s3_bucket = app.config['S3_BUCKET']
+
+            try:
+                s3_client.upload_fileobj(
+                    file,
+                    s3_bucket,
+                    s3_filename,
+                    ExtraArgs={'ContentType': content_type}
+                )
+                file_url = f"{app.config.get('DOMAIN_NAME_IMAGES', '')}/{s3_filename}" # Assuming DOMAIN_NAME_IMAGES is the base URL for S3 content
+                if app.config.get('S3_ENDPOINT_URL') and not app.config.get('DOMAIN_NAME_IMAGES'):
+                    # If using a custom endpoint (like MinIO/R2) and no specific domain for images,
+                    # construct URL based on bucket and endpoint.
+                    # This might need adjustment based on S3 provider's URL structure.
+                    file_url = f"{app.config['S3_ENDPOINT_URL']}/{s3_bucket}/{s3_filename}"
+
+                ampersound = Ampersound(
+                    user_id=current_user.id,
+                    name=clean_name,
+                    file_path=s3_filename # Store S3 key/path
+                )
+                db.session.add(ampersound)
+                db.session.commit()
+                return jsonify({"message": "Ampersound created successfully!", "name": clean_name, "url": file_url, "ampersound_id": ampersound.id}), 201
+            except Exception as e:
+                app.logger.error(f"Error uploading ampersound to S3: {e}")
+                return jsonify({"message": "Error uploading file to S3."}), 500
+        elif not s3_client:
+            return jsonify({"message": "File storage (S3) is not configured on the server."}), 500
+        else:
+            return jsonify({"message": "Invalid file."}), 400
+
+    @app.route('/ampersounds/<string:username>/<string:sound_name>', methods=['GET'])
+    def get_ampersound(username, sound_name):
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        # Sanitize sound_name before querying
+        clean_sound_name = secure_filename(sound_name).lower()
+        ampersound = Ampersound.query.filter_by(user_id=user.id, name=clean_sound_name).first()
+        if not ampersound:
+            return jsonify({"message": "Ampersound not found"}), 404
+
+        if s3_client and app.config.get('S3_BUCKET'):
+            s3_bucket = app.config['S3_BUCKET']
+            s3_key = ampersound.file_path
+            try:
+                # Generate a presigned URL for temporary access if files aren't public
+                # Or construct direct URL if files are public
+                # For simplicity, assuming public access for now or direct URL construction
+                # If your bucket/files are private, you MUST generate a presigned URL here.
+                
+                domain_name = app.config.get('DOMAIN_NAME_IMAGES')
+                s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+
+                if domain_name: # If a CDN or direct domain is configured for images/assets
+                    file_url = f"{domain_name}/{s3_key}"
+                elif s3_endpoint_url: # For S3-compatible services like MinIO/R2
+                    # Ensure the URL is formed correctly based on your S3 provider
+                    # This might be https://<bucket>.<endpoint>/<key> or https://<endpoint>/<bucket>/<key>
+                    # The example below assumes endpoint/bucket/key
+                    file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                    # For Cloudflare R2 with public bucket and custom domain, it might be simpler.
+                    # If R2 bucket is public and mapped to r2.dev/your-bucket, then file_url = f"https://r2.dev/{s3_bucket}/{s3_key}"
+                else: # Fallback for AWS S3 direct (less common for direct serving without CF etc)
+                    # Standard AWS S3 URL: https://<bucket-name>.s3.<region>.amazonaws.com/<key>
+                    # This requires region to be correctly set and not 'auto'
+                    s3_region = app.config.get('S3_REGION', 'us-east-1') # Default if not set
+                    if s3_region == 'auto': # 'auto' is R2 specific, AWS S3 needs a region
+                        return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
+                    file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                
+                return jsonify({"name": ampersound.name, "url": file_url, "user": user.username}), 200
+                # To directly serve/redirect:
+                # from flask import redirect
+                # return redirect(file_url, code=302)
+
+            except Exception as e:
+                app.logger.error(f"Error generating Ampersound URL: {e}")
+                return jsonify({"message": "Error retrieving Ampersound URL."}), 500
+        else:
+            return jsonify({"message": "File storage (S3) is not configured on the server."}), 500
+
+    @app.route('/api/v1/ampersounds/my_sounds', methods=['GET'])
+    @login_required
+    def list_my_ampersounds():
+        user_ampersounds = Ampersound.query.filter_by(user_id=current_user.id).order_by(Ampersound.timestamp.desc()).all()
+        
+        s3_client = app.config.get('S3_CLIENT') # Get S3 client from app config
+        s3_bucket = app.config.get('S3_BUCKET')
+        domain_name_images = app.config.get('DOMAIN_NAME_IMAGES')
+        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+        s3_region = app.config.get('S3_REGION', 'us-east-1')
+
+        results = []
+        for ampersound in user_ampersounds:
+            file_url = None
+            if s3_client and s3_bucket:
+                s3_key = ampersound.file_path
+                try:
+                    if domain_name_images:
+                        file_url = f"{domain_name_images}/{s3_key}"
+                    elif s3_endpoint_url:
+                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                    else:
+                        if s3_region == 'auto': # Should not happen if properly configured for AWS S3
+                            app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region for AWS S3.")
+                            file_url = None # Or some placeholder/error indicator
+                        else:
+                            file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                except Exception as e:
+                    app.logger.error(f"Error generating URL for ampersound {ampersound.id}: {e}")
+            
+            results.append({
+                'id': ampersound.id,
+                'name': ampersound.name,
+                'file_path': ampersound.file_path, # Or use the generated file_url
+                'url': file_url, # The generated playable URL
+                'timestamp': ampersound.timestamp.isoformat()
+            })
+        
+        return jsonify(results), 200
 
     return app
 

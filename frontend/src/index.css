@@ -354,3 +354,16 @@ nav a.active { /* Style for active link */
     width: 1em; /* Scale with font size */
     height: 1em;
 }
+
+/* Ampersound Tag Styling */
+.ampersound-tag {
+  cursor: pointer;
+  color: #007bff; /* A standard blue link color */
+  text-decoration: underline;
+  font-weight: bold; /* Make it stand out a bit */
+}
+
+.ampersound-tag:hover {
+  color: #0056b3; /* Darker blue on hover */
+  text-decoration: none; /* Optional: remove underline on hover */
+}

@@ -144,4 +144,61 @@
         width: 100%;
         margin-bottom: 1.5rem; /* Add margin back for stacked layout */
     }
+}
+
+/* Ampersound Management Section */
+.ampersound-management-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color-dark); /* Use theme variable */
+}
+
+.ampersound-recorder-section {
+    margin-bottom: 30px; /* Space between recorder and list */
+}
+
+.my-ampersounds-list-section h3 {
+    margin-bottom: 15px;
+    color: var(--text-color-dark); /* Use theme variable */
+}
+
+.ampersound-list {
+    list-style: none;
+    padding: 0;
+}
+
+.ampersound-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color-dark); /* Use theme variable */
+}
+
+.ampersound-list-item:last-child {
+    border-bottom: none;
+}
+
+.ampersound-name {
+    font-weight: bold;
+    color: var(--primary-color); /* Use theme variable */
+    margin-right: 15px;
+}
+
+.ampersound-audio-player {
+    height: 40px; /* Adjust height for a more compact player */
+    max-width: 250px; /* Limit width of the audio player */
+    vertical-align: middle;
+}
+
+/* Responsive adjustments for smaller screens if needed */
+@media (max-width: 600px) {
+    .ampersound-list-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .ampersound-audio-player {
+        margin-top: 8px;
+        max-width: 100%;
+    }
 } 

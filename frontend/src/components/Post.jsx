@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'; // Import Link
 import './Post.css'; // Import the CSS file
 import Spinner from './Spinner'; // Import Spinner
 import { FaTrashAlt, FaRegCommentDots } from 'react-icons/fa'; // Import Trash and Comment icons
+import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
 
 // Basic styling for the component -- REMOVED
 // const postStyle = { ... };
@@ -139,9 +140,12 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
         <img src={post.image_url} alt="Post image" className="post-image" />
       )}
       
-      {/* Post Content */}
-      {/* Only render content paragraph if content exists */} 
-      {post.content && <p className="post-content">{post.content}</p>} 
+      {/* Post Content - Updated to use PlayableContentViewer */}
+      {post.content && 
+        <div className="post-content">
+            <PlayableContentViewer htmlContent={post.content} />
+        </div>
+      } 
 
       {/* Display Categories/Classifications */}
       {typeof post.classification_scores === 'object' && 
@@ -192,7 +196,10 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
                  <Link to={`/profile/${comment.author?.username}`} className="comment-author-link">
                     {comment.author?.username || 'User'}
                  </Link>
-                 : {comment.content}
+                 {/* Comment Content - Updated to use PlayableContentViewer */} 
+                 <div className="comment-content-wrapper">
+                    <PlayableContentViewer htmlContent={comment.content} />
+                 </div>
                  <span className="comment-timestamp">{new Date(comment.timestamp).toLocaleString()}</span>
                  {/* Comment Delete Button */} 
                  {currentUser && currentUser.id === comment.author?.id && (

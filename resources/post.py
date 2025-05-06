@@ -8,6 +8,9 @@ import os
 from sqlalchemy.orm import joinedload
 
 from models import db, User, Post, PostCategoryScore, UserInterest, PostPrivacy, FriendRequest, FriendRequestStatus
+# Import the formatter function
+from utils import format_text_with_ampersounds 
+
 # We might need access to the S3 client and GemmaClassification instance from app.py
 # This might require passing app context or using current_app
 
@@ -29,9 +32,18 @@ author_fields = {
     'profile_picture': fields.String # Add profile pic if needed
 }
 
+# Formatted content field for Ampersounds
+class FormattedContent(fields.Raw):
+    def format(self, value):
+        # 'value' here is the post object itself, passed via attribute
+        post_object = value
+        if not post_object.content or not post_object.author:
+            return post_object.content # Return original content if no author or content
+        return format_text_with_ampersounds(post_object.content, post_object.author.username)
+
 post_fields = {
     'id': fields.Integer,
-    'content': fields.String,
+    'content': FormattedContent(attribute=lambda x: x), # Pass the whole post object to our custom field
     'image_url': fields.String,
     'timestamp': fields.DateTime(dt_format='iso8601'),
     'privacy': fields.String(attribute='privacy.name'), # Get enum name

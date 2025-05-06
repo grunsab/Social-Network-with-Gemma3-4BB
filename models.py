@@ -237,3 +237,20 @@ class InviteCode(db.Model):
     def __repr__(self):
         used_status = f"Used by User ID: {self.used_by_id}" if self.used_by_id else "Not used"
         return f'<InviteCode {self.code} - Issued by User ID: {self.issuer_id} - {used_status}>' 
+
+# New Ampersound model
+class Ampersound(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)  # The tag name, e.g., "hello" for "&hello"
+    file_path = db.Column(db.String(512), nullable=False) # Path to the audio file
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    # Define a unique constraint for user_id and name
+    __table_args__ = (db.UniqueConstraint('user_id', 'name', name='uq_user_ampersound_name'),)
+
+    # Relationship to User
+    user = db.relationship('User', backref=db.backref('ampersounds', lazy=True))
+
+    def __repr__(self):
+        return f'<Ampersound {self.id} @{self.user.username}&{self.name}>' 

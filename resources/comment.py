@@ -3,6 +3,8 @@ from flask_restful import Resource, reqparse, fields, marshal_with
 from flask_login import current_user, login_required
 
 from models import db, Post, Comment, User, PostPrivacy # Import necessary models
+# Import the formatter function
+from utils import format_text_with_ampersounds 
 
 # --- Field definitions for Marshaling --- 
 # Re-use author_fields if defined elsewhere or define here
@@ -11,9 +13,20 @@ author_fields = {
     'username': fields.String
 }
 
+# Formatted content field for Ampersounds in comments
+class FormattedCommentContent(fields.Raw):
+    def format(self, value):
+        # 'value' here is the comment object itself, passed via attribute
+        comment_object = value
+        # Ensure author is loaded. If not, this will cause a lazy load.
+        # It's better if author is eager-loaded in the query.
+        if not comment_object.content or not comment_object.author:
+            return comment_object.content
+        return format_text_with_ampersounds(comment_object.content, comment_object.author.username)
+
 comment_fields = {
     'id': fields.Integer,
-    'content': fields.String,
+    'content': FormattedCommentContent(attribute=lambda x: x), # Pass the whole comment object
     'timestamp': fields.DateTime(dt_format='iso8601'),
     'author': fields.Nested(author_fields), # Nested author data
     'post_id': fields.Integer

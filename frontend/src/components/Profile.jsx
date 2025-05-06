@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Post from './Post'; // Re-use Post component
 import './Profile.css'; // Import the CSS file
 import Spinner from './Spinner'; // Import Spinner
+import AmpersoundRecorder from './AmpersoundRecorder'; // Import AmpersoundRecorder
 
 function Profile() {
   const { username } = useParams(); // Get username from URL parameter
@@ -12,6 +13,11 @@ function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false); // Loading state for friend actions
+
+  // State for user's ampersounds
+  const [myAmpersounds, setMyAmpersounds] = useState([]);
+  const [loadingAmpersounds, setLoadingAmpersounds] = useState(false);
+  const [errorAmpersounds, setErrorAmpersounds] = useState('');
 
   // Use useCallback for fetchProfile to prevent re-renders if passed as prop
   const fetchProfile = useCallback(async () => {
@@ -38,6 +44,37 @@ function Profile() {
     fetchProfile();
     // Dependency array includes username to re-fetch if URL changes
   }, [fetchProfile]);
+
+  // Fetch user's ampersounds if it's their own profile
+  useEffect(() => {
+    const fetchMyAmpersounds = async () => {
+        if (profileData && profileData.friendship_status === 'SELF') {
+            setLoadingAmpersounds(true);
+            setErrorAmpersounds('');
+            try {
+                const response = await fetch('/api/v1/ampersounds/my_sounds', {
+                    credentials: 'include' // For session cookie
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.message || 'Failed to fetch your Ampersounds');
+                }
+                const data = await response.json();
+                setMyAmpersounds(data || []);
+            } catch (err) {
+                console.error("Error fetching Ampersounds:", err);
+                setErrorAmpersounds(err.message || 'Could not load your Ampersounds.');
+                setMyAmpersounds([]);
+            } finally {
+                setLoadingAmpersounds(false);
+            }
+        }
+    };
+
+    if (profileData && profileData.friendship_status === 'SELF') {
+        fetchMyAmpersounds();
+    }
+  }, [profileData]); // Rerun when profileData is loaded/changed
 
   // --- Friendship Action Handlers ---
   const handleFriendAction = async (actionType, endpoint, method, body = null) => {
@@ -172,6 +209,36 @@ function Profile() {
             </div>
         </div>
       </div>
+
+      {/* Ampersound Recorder and List for own profile */} 
+      {friendship_status === 'SELF' && (
+        <div className="profile-section ampersound-management-section">
+          <div className="ampersound-recorder-section">
+            <h3>Create New Ampersound</h3>
+            <AmpersoundRecorder />
+          </div>
+
+          <div className="my-ampersounds-list-section">
+            <h3>My Saved Ampersounds ({myAmpersounds.length})</h3>
+            {loadingAmpersounds && <Spinner contained={true} />}
+            {errorAmpersounds && <p className="error-message">{errorAmpersounds}</p>}
+            {!loadingAmpersounds && !errorAmpersounds && myAmpersounds.length === 0 && (
+                <p>You haven't created any Ampersounds yet.</p>
+            )}
+            {!loadingAmpersounds && myAmpersounds.length > 0 && (
+                <ul className="ampersound-list">
+                    {myAmpersounds.map(sound => (
+                        <li key={sound.id} className="ampersound-list-item">
+                            <span className="ampersound-name">&{sound.name}</span>
+                            {sound.url && <audio controls src={sound.url} className="ampersound-audio-player"></audio>}
+                            {/* TODO: Add delete/rename buttons here later */} 
+                        </li>
+                    ))}
+                </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* NEW: Wrapper for Interests and Posts */}
       <div className="profile-main-content">
