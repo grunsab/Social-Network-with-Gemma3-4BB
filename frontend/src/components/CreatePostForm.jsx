@@ -31,14 +31,20 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
 
-  // Cleanup preview audio on unmount
+  // Cleanup preview audio on unmount or when previewAudio state changes
   useEffect(() => {
+    const audioToClean = previewAudio; // Capture the instance for this effect closure
     return () => {
-        if (previewAudio) {
-            previewAudio.pause();
+        if (audioToClean) {
+            console.log('CreatePostForm.jsx: Cleaning up preview audio:', audioToClean.src);
+            audioToClean.pause();
+            audioToClean.onended = null;
+            audioToClean.onerror = null;
+            audioToClean.onplaying = null; // Also clear onplaying
+            // audioToClean.src = ''; // Optional: to forcefully release resources
         }
     };
-  }, [previewAudio]);
+  }, [previewAudio]); // Re-run when previewAudio state variable itself changes
 
   // Wrap the hook's content change handler to also update local state
   const handleLocalContentChange = (event) => {
@@ -128,41 +134,55 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
 
   // Function to handle previewing a sound
   const handlePreviewSound = async (event, soundUrl) => {
-    event.stopPropagation(); // Prevent suggestion click from firing
+    event.stopPropagation(); 
     setPreviewError('');
     
-    if (previewAudio) { // Stop previous preview if any
+    // If there's an existing audio object in state, pause it immediately.
+    // Then, set the state to null, which will trigger the useEffect cleanup for the old object.
+    if (previewAudio) { 
         previewAudio.pause();
         setPreviewAudio(null);
     }
 
     if (!soundUrl) {
         setPreviewError('No preview available.');
-        return;
+        return; // Don't set loading true if no URL
     }
 
     setIsPreviewLoading(true);
+    const newAudio = new Audio(soundUrl); // Create the new audio object
+
+    newAudio.onplaying = () => {
+        console.log("CreatePostForm.jsx: Preview playback started:", newAudio.src);
+        // isPreviewLoading is set to false in the finally block after play() is called.
+        // If play() succeeds, this confirms playback. If play() fails, finally still runs.
+    };
+
+    newAudio.onended = () => {
+        console.log("CreatePostForm.jsx: Preview ended:", newAudio.src);
+        // Only nullify state if this specific audio instance is still the current one.
+        setPreviewAudio(currentInState => (currentInState === newAudio ? null : currentInState));
+    };
+
+    newAudio.onerror = (e) => {
+        console.error("CreatePostForm.jsx: Audio preview error:", newAudio.src, e);
+        setPreviewError('Error playing preview audio.'); 
+        // Only nullify state if this specific audio instance is still the current one.
+        setPreviewAudio(currentInState => (currentInState === newAudio ? null : currentInState));
+    };
+
     try {
-        const audio = new Audio(soundUrl);
-        setPreviewAudio(audio);
-
-        // Wait for audio to be ready to play to avoid race conditions
-        await audio.play(); 
-        // Play started successfully
-        console.log("Preview playing...");
-
-        audio.onended = () => setPreviewAudio(null); // Clear when finished
-        audio.onerror = (e) => {
-            console.error("Audio preview error:", e);
-            setPreviewError('Error loading preview audio.'); 
-            setPreviewAudio(null);
-        };
-
+        // Set the new audio object into state, making it the "current" one.
+        setPreviewAudio(newAudio);
+        await newAudio.play(); 
+        console.log("CreatePostForm.jsx: Preview play() successfully called for:", newAudio.src);
     } catch (err) {
-        console.error("Error creating or playing preview audio:", err);
-        setPreviewError(`Could not play preview: ${err.message}`);
-        setPreviewAudio(null);
+        console.error("CreatePostForm.jsx: Error calling play() on preview audio:", newAudio.src, err);
+        setPreviewError(`Could not play preview: ${err.message || 'Playback failed'}`);
+        // If play() itself fails, ensure this newAudio (which was just set to state) is cleared.
+        setPreviewAudio(currentInState => (currentInState === newAudio ? null : currentInState));
     } finally {
+        // Regardless of play() success or failure, the "loading" phase (icon spinning) is over.
         setIsPreviewLoading(false);
     }
   };

@@ -40,14 +40,20 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   const [isCommentPreviewLoading, setIsCommentPreviewLoading] = useState(false);
   const [commentPreviewError, setCommentPreviewError] = useState('');
 
-  // Cleanup preview audio on unmount
+  // Cleanup preview audio on unmount or when commentPreviewAudio state changes
   useEffect(() => {
+    const audioToClean = commentPreviewAudio; // Capture the instance for this effect closure
     return () => {
-        if (commentPreviewAudio) {
-            commentPreviewAudio.pause();
+        if (audioToClean) {
+            console.log('Post.jsx: Cleaning up comment preview audio:', audioToClean.src);
+            audioToClean.pause();
+            audioToClean.onended = null;
+            audioToClean.onerror = null;
+            audioToClean.onplaying = null;
+            // audioToClean.src = ''; 
         }
     };
-  }, [commentPreviewAudio]);
+  }, [commentPreviewAudio]); // Re-run when commentPreviewAudio state variable itself changes
 
   // Wrap hook's content change handler
   const handleLocalCommentChange = (event) => {
@@ -67,9 +73,11 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
 
   // Function to handle previewing a sound from comment suggestions
   const handlePreviewCommentSound = async (event, soundUrl) => {
-    event.stopPropagation(); // Prevent suggestion click from firing
+    event.stopPropagation(); 
     setCommentPreviewError('');
     
+    // If there's an existing audio object in state, pause it immediately.
+    // Then, set the state to null, which will trigger the useEffect cleanup for the old object.
     if (commentPreviewAudio) { 
         commentPreviewAudio.pause();
         setCommentPreviewAudio(null);
@@ -77,29 +85,41 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
 
     if (!soundUrl) {
         setCommentPreviewError('No preview available.');
-        return;
+        return; // Don't set loading true if no URL
     }
 
     setIsCommentPreviewLoading(true);
+    const newAudio = new Audio(soundUrl); // Create the new audio object
+
+    newAudio.onplaying = () => {
+        console.log("Post.jsx: Comment preview playback started:", newAudio.src);
+    };
+
+    newAudio.onended = () => {
+        console.log("Post.jsx: Comment preview ended:", newAudio.src);
+        // Only nullify state if this specific audio instance is still the current one.
+        setCommentPreviewAudio(currentInState => (currentInState === newAudio ? null : currentInState));
+    };
+
+    newAudio.onerror = (e) => {
+        console.error("Post.jsx: Comment audio preview error:", newAudio.src, e);
+        setCommentPreviewError('Error playing comment preview audio.'); 
+        // Only nullify state if this specific audio instance is still the current one.
+        setCommentPreviewAudio(currentInState => (currentInState === newAudio ? null : currentInState));
+    };
+
     try {
-        const audio = new Audio(soundUrl);
-        setCommentPreviewAudio(audio);
-
-        await audio.play(); 
-        console.log("Comment Preview playing...");
-
-        audio.onended = () => setCommentPreviewAudio(null);
-        audio.onerror = (e) => {
-            console.error("Comment Audio preview error:", e);
-            setCommentPreviewError('Error loading preview audio.'); 
-            setCommentPreviewAudio(null);
-        };
-
+        // Set the new audio object into state, making it the "current" one.
+        setCommentPreviewAudio(newAudio);
+        await newAudio.play(); 
+        console.log("Post.jsx: Comment preview play() successfully called for:", newAudio.src);
     } catch (err) {
-        console.error("Error creating or playing comment preview audio:", err);
-        setCommentPreviewError(`Could not play preview: ${err.message}`);
-        setCommentPreviewAudio(null);
+        console.error("Post.jsx: Error calling play() on comment preview audio:", newAudio.src, err);
+        setCommentPreviewError(`Could not play preview: ${err.message || 'Playback failed'}`);
+        // If play() itself fails, ensure this newAudio (which was just set to state) is cleared.
+        setCommentPreviewAudio(currentInState => (currentInState === newAudio ? null : currentInState));
     } finally {
+        // Regardless of play() success or failure, the "loading" phase (icon spinning) is over.
         setIsCommentPreviewLoading(false);
     }
   };
