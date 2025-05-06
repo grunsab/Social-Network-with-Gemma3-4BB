@@ -18,13 +18,13 @@ from extensions import db, login_manager, migrate
 # If models.py imports 'app', this needs further adjustment.
 # Corrected imports: Use InviteCode instead of Invite.
 # Removed Profile, Friendship, and Category as they don't exist as distinct models.
-from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest
+from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy
 
 # Import Resources AFTER defining configurations and extensions
 from resources.auth import UserRegistration, UserLogin
 from resources.post import PostListResource, PostResource
 from resources.comment import CommentListResource, CommentResource
-from resources.profile import ProfileResource, MyProfileResource
+from resources.profile import ProfileResource, MyProfileResource, profile_data_fields
 from resources.friendship import FriendRequestListResource, FriendRequestResource, FriendshipResource
 from resources.feed import FeedResource
 from resources.category import CategoryResource
@@ -310,13 +310,34 @@ def create_app(config_name='default'):
     api.add_resource(CommentListResource, '/api/v1/posts/<int:post_id>/comments')
     api.add_resource(CommentResource, '/api/v1/comments/<int:comment_id>')
     api.add_resource(ProfileResource, '/api/v1/profiles/<string:username>')
-    api.add_resource(MyProfileResource, '/api/v1/profiles/me')
     api.add_resource(FriendRequestListResource, '/api/v1/friend-requests')
     api.add_resource(FriendRequestResource, '/api/v1/friend-requests/<int:request_id>')
     api.add_resource(FriendshipResource, '/api/v1/friendships/<int:user_id>')
     api.add_resource(FeedResource, '/api/v1/feed')
     api.add_resource(CategoryResource, '/api/v1/categories/<string:category_name>/posts')
     api.add_resource(InviteResource, '/api/v1/invites')
+
+    # --- Manually add routes for MyProfileResource --- 
+    # Instantiate the resource once (though it's stateless here)
+    my_profile_view = MyProfileResource() 
+
+    @app.route('/api/v1/profiles/me', methods=['GET'])
+    @login_required
+    def get_my_profile():
+        # Manually call the resource's get method
+        # Note: marshal_with won't apply automatically, but resource method returns dict.
+        # Return data with default 200 status.
+        response_data = my_profile_view.get()
+        return jsonify(response_data), 200
+
+    @app.route('/api/v1/profiles/me', methods=['PATCH'])
+    @login_required
+    def patch_my_profile():
+        # Manually call the resource's patch method
+        # Note: marshal_with won't apply automatically, resource method returns dict.
+        # Return data with default 200 status.
+        response_data = my_profile_view.patch()
+        return jsonify(response_data), 200
 
     # --- User Loader for Flask-Login ---
     @login_manager.user_loader

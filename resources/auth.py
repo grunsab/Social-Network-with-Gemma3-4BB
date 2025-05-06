@@ -1,7 +1,7 @@
 from flask import request, jsonify, session
 from flask_restful import Resource
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User # Assuming User model is in models.py
+from models import db, User, InviteCode # Import InviteCode
 from flask_login import login_user, logout_user, login_required
 import os
 
@@ -11,6 +11,20 @@ class UserRegistration(Resource):
         username = data.get('username')
         email = data.get('email')
         password = data.get('password')
+        invite_code_str = data.get('invite_code') # Get invite code from request
+
+        invite_code_obj = None # To store the valid InviteCode object if found
+
+        # --- Invite Code Validation --- 
+        if invite_code_str:
+            invite_code_obj = InviteCode.query.filter_by(code=invite_code_str).first()
+            # Check if code exists and is still valid (i.e., NOT used)
+            if not invite_code_obj or invite_code_obj.is_used:
+                return {'message': 'Invalid or used invite code'}, 400 # Bad Request
+        # else: 
+            # Optional: If invites are MANDATORY, reject here
+            # return {'message': 'Invite code required for registration'}, 400
+            # If optional, proceed without validation if no code provided.
 
         if not username or not email or not password:
             return {'message': 'Missing username, email, or password'}, 400
@@ -22,7 +36,13 @@ class UserRegistration(Resource):
             return {'message': 'Email already exists'}, 409 # Conflict
 
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = User(username=username, email=email, password_hash=hashed_password)
+        new_user = User(
+            username=username, 
+            email=email, 
+            password_hash=hashed_password,
+            # Link user to inviter if applicable
+            invited_by_user_id=invite_code_obj.issuer_id if invite_code_obj else None
+        )
 
         # Set profile picture path based on environment (local vs S3/R2)
         if os.environ.get("S3_BUCKET"): # Assuming S3 indicates cloud storage
@@ -33,8 +53,20 @@ class UserRegistration(Resource):
              new_user.profile_picture = '/static/images/default_profile.png' # Default local path
 
         try:
+            print(f"DEBUG: Attempting to add User: {new_user.username}, Invite Issuer: {invite_code_obj.issuer_id if invite_code_obj else 'None'}")
             db.session.add(new_user)
+            # Mark invite code as used AFTER adding user, before commit
+            if invite_code_obj:
+                # Wait until user is added and has an ID before associating
+                db.session.flush() # Ensure new_user gets an ID
+                print(f"DEBUG: Marking invite code {invite_code_obj.code} as used by user ID {new_user.id}.") # Debug print
+                invite_code_obj.is_used = True 
+                invite_code_obj.used_by_id = new_user.id # Set the foreign key on InviteCode
+                db.session.add(invite_code_obj) 
+            
+            print("DEBUG: Attempting db.session.commit()") # Debug print
             db.session.commit()
+            print("DEBUG: db.session.commit() successful.") # Debug print
             # Maybe return the created user ID or a success message
             return {'message': 'User created successfully', 'user_id': new_user.id}, 201 # Created
         except Exception as e:
@@ -53,11 +85,19 @@ class UserLogin(Resource):
             return {'message': 'Missing username/email or password'}, 400
 
         # Try finding user by email first, then by username
-        user = User.query.filter_by(email=identifier).first()
-        if not user:
-            user = User.query.filter_by(username=identifier).first()
+        # Explicitly select only needed columns to avoid issues with model changes
+        user_data = User.query.with_entities(User.id, User.password_hash, User.username, User.email, User.profile_picture).filter_by(email=identifier).first()
+        if not user_data:
+            user_data = User.query.with_entities(User.id, User.password_hash, User.username, User.email, User.profile_picture).filter_by(username=identifier).first()
 
-        if user and check_password_hash(user.password_hash, password):
+        # Reconstruct a minimal user-like object or check directly
+        if user_data and check_password_hash(user_data.password_hash, password):
+            # Need the actual User object to pass to flask_login.login_user
+            # Re-query for the full object now that we know the user is valid
+            user = User.query.get(user_data.id)
+            if not user: # Should not happen, but defensive check
+                 return {'message': 'Login failed after verification'}, 500
+                 
             login_user(user, remember=remember)
             # Return user info upon successful login
             return {

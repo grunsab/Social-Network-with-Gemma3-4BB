@@ -1,9 +1,10 @@
-from flask import current_app
+from flask import current_app, jsonify
 from flask_restful import Resource, fields, marshal_with, reqparse, abort
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, undefer
-from sqlalchemy import desc, func, union_all # Added union_all
+from sqlalchemy import desc, func, union_all, or_, and_ # Added or_ and and_
 import math # For ceiling division in pagination calculation
+import sys # Added for print statements
 
 from models import db, User, Post, UserInterest, PostCategoryScore, PostPrivacy, FriendRequest, FriendRequestStatus
 
@@ -64,28 +65,36 @@ class FeedResource(Resource):
         if not interested_categories:
             # --- Fallback: Recent Posts (If no interests) ---
             message = "Showing recent posts. Explore more to personalize your feed!"
-            combined_filter = (
-                (Post.user_id != current_user.id) & # Exclude own posts
-                (
-                    (Post.privacy == PostPrivacy.PUBLIC) |
-                    (
-                        (Post.privacy == PostPrivacy.FRIENDS) &
-                        Post.user_id.in_(friend_ids)
+            print(f"DEBUG: User {current_user.id} - Taking FEED FALLBACK path", file=sys.stderr)
+            # Original filter excluded own posts. New filter includes them.
+            combined_filter = or_(
+                Post.user_id == current_user.id, # Own posts (all their privacy levels visible to them)
+                and_( # Other users' posts
+                    Post.user_id != current_user.id,
+                    or_(
+                        Post.privacy == PostPrivacy.PUBLIC, # Public posts from others
+                        and_(
+                            Post.privacy == PostPrivacy.FRIENDS, # Friends-only posts from friends
+                            Post.user_id.in_(friend_ids)
+                        )
                     )
                 )
             )
             # Count total items matching the filter (before category blocking)
             total_items = db.session.query(func.count(Post.id)).filter(combined_filter).scalar()
+            print(f"DEBUG: User {current_user.id} - Fallback total_items: {total_items}", file=sys.stderr)
 
             # Fetch posts for the current page
             posts_unfiltered = Post.query.options(
                 joinedload(Post.author),
                 joinedload(Post.category_scores) # Need scores for category blocking below
             ).filter(combined_filter).order_by(Post.timestamp.desc()).limit(per_page).offset(offset).all()
+            print(f"DEBUG: User {current_user.id} - Fallback posts_unfiltered IDs: {[p.id for p in posts_unfiltered]}", file=sys.stderr)
 
         else:
             # --- Personalized Feed Logic --- 
             message = "Showing personalized feed based on your interests."
+            print(f"DEBUG: User {current_user.id} - Taking FEED PERSONALIZED path with interests: {interested_categories}", file=sys.stderr)
             user_interest_subq = db.session.query(
                 UserInterest.category,
                 UserInterest.score
@@ -97,38 +106,55 @@ class FeedResource(Resource):
             # Base query for calculating relevance of posts (Public or Friend's) not authored by current user
             relevance_base_query = db.session.query(
                 Post.id.label('post_id'),
-                func.sum(
+                # Use coalesce to handle potential null score if outer joins produce no match
+                func.coalesce(func.sum(
                     PostCategoryScore.score * user_interest_subq.c.score
-                ).label('relevance_score'),
+                ), 0).label('relevance_score'),
                 Post.timestamp.label('timestamp')
-            ).select_from(Post).join(
+            ).select_from(Post).outerjoin( # Changed to outerjoin
                 PostCategoryScore, Post.id == PostCategoryScore.post_id
-            ).join(
+            ).outerjoin( # Changed to outerjoin
                 user_interest_subq, PostCategoryScore.category == user_interest_subq.c.category
             ).filter(
-                Post.user_id != current_user.id, # Exclude own posts
-                (
-                    (Post.privacy == PostPrivacy.PUBLIC) |
-                    (
-                        (Post.privacy == PostPrivacy.FRIENDS) &
-                        Post.user_id.in_(friend_ids)
+                # Apply the updated filter here too, to include own posts
+                or_(
+                    Post.user_id == current_user.id, # Own posts
+                    and_( # Other users' relevant posts
+                        Post.user_id != current_user.id,
+                        or_(
+                            Post.privacy == PostPrivacy.PUBLIC,
+                            and_(
+                                Post.privacy == PostPrivacy.FRIENDS,
+                                Post.user_id.in_(friend_ids)
+                            )
+                        )
                     )
                 )
             ).group_by(Post.id, Post.timestamp)
 
             # Order by relevance score, then timestamp
             ordered_relevance_query = relevance_base_query.order_by(
-                desc('relevance_score'),
+                desc('relevance_score'), # Posts with no matching score/interest will have score 0
                 desc('timestamp')
             )
 
             # Get total count for pagination
-            # This is potentially slow on large datasets, consider approximations if needed
-            total_items = ordered_relevance_query.count()
+            # Need to count differently now because outer join might include posts 
+            # that don't actually match user interests. We should count based on the 
+            # visibility filter *before* the joins perhaps?
+            # Let's recalculate total_items based on visibility filter only for pagination accuracy.
+            visibility_filter_for_count = or_(
+                Post.user_id == current_user.id,
+                and_(Post.user_id != current_user.id, or_(Post.privacy == PostPrivacy.PUBLIC, and_(Post.privacy == PostPrivacy.FRIENDS, Post.user_id.in_(friend_ids))))
+            )
+            total_items = db.session.query(func.count(Post.id)).filter(visibility_filter_for_count).scalar()
+            # total_items = ordered_relevance_query.count() # Old count might be inaccurate with outer join
+            print(f"DEBUG: User {current_user.id} - Personalized total_items (recalculated): {total_items}", file=sys.stderr)
 
             # Apply pagination to the relevance query to get IDs for the current page
             paginated_relevance_items = ordered_relevance_query.limit(per_page).offset(offset).all()
             ordered_post_ids = [item.post_id for item in paginated_relevance_items]
+            print(f"DEBUG: User {current_user.id} - Personalized ordered_post_ids: {ordered_post_ids}", file=sys.stderr)
 
             # Fetch full Post objects for these IDs
             if ordered_post_ids:

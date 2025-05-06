@@ -84,7 +84,7 @@ function Dashboard() {
       <h3>{feedMessage || 'Your Feed'}</h3>
       {errorPosts && <p className="error-message">Error: {errorPosts}</p>}
       
-      <div className="posts-list" style={{ marginTop: '1.5rem' }}>
+      <div className="posts-list" data-cy="feed-posts-list" style={{ marginTop: '1.5rem' }}>
           {!loadingPosts && posts.length === 0 ? (
             <p>No posts found in your feed. Create one or explore!</p>
           ) : (

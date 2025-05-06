@@ -1,5 +1,5 @@
-from flask import current_app
-from flask_restful import Resource, fields, marshal_with, abort
+from flask import current_app, request
+from flask_restful import Resource, fields, marshal_with, abort, reqparse
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -46,6 +46,11 @@ profile_data_fields = {
     'friendship_status': fields.String, 
     'pending_request_id': fields.Integer(default=None) # <<< Add field for request ID
 }
+
+# <<< Define parser for PATCH request >>>
+profile_patch_parser = reqparse.RequestParser()
+profile_patch_parser.add_argument('invites_left', type=int, location='json', help='Number of invites left (optional)')
+# Add other editable fields here later if needed (e.g., email, profile_picture)
 
 class ProfileResource(Resource):
     @login_required
@@ -123,6 +128,7 @@ class ProfileResource(Resource):
 
 # <<< New Resource for /me endpoint >>>
 class MyProfileResource(Resource):
+    @login_required
     @marshal_with(profile_data_fields)
     def get(self):
         if not current_user or not current_user.is_authenticated:
@@ -160,4 +166,61 @@ class MyProfileResource(Resource):
             'interests': interests,
             'friendship_status': status,
             'pending_request_id': pending_request_id 
+        } 
+
+    @login_required
+    @marshal_with(profile_data_fields)
+    def patch(self):
+        if not current_user or not current_user.is_authenticated:
+             abort(401, message="Authentication required.")
+
+        args = profile_patch_parser.parse_args()
+        user_updated = False
+
+        # Update invites_left if provided
+        if args['invites_left'] is not None:
+            # Optional: Add validation (e.g., must be non-negative)
+            if args['invites_left'] < 0:
+                 abort(400, message="invites_left cannot be negative.")
+            current_user.invites_left = args['invites_left']
+            user_updated = True
+            print(f"INFO: Resetting invites for {current_user.username} to {args['invites_left']}")
+
+        # Add logic for other editable fields here from parser...
+        # if args['email']:
+        #   current_user.email = args['email']
+        #   user_updated = True
+
+        if user_updated:
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"ERROR: Failed to update profile for user {current_user.id}: {e}")
+                abort(500, message="Failed to update profile.")
+        
+        # Re-fetch data needed for marshal_with after potential commit
+        # (GET method logic duplicated here - could be refactored)
+        # Fetch all posts for the user
+        posts_query = Post.query.filter_by(user_id=current_user.id)
+        posts = posts_query.options(
+            joinedload(Post.author), 
+            joinedload(Post.category_scores)
+        ).order_by(Post.timestamp.desc()).all()
+        
+        blocked_categories = current_app.config.get('BLOCKED_CATEGORIES', set())
+        filtered_posts = []
+        for p in posts:
+             post_categories = {score.category for score in p.category_scores}
+             if not post_categories.intersection(blocked_categories):
+                 filtered_posts.append(p)
+
+        interests = UserInterest.query.filter_by(user_id=current_user.id).order_by(UserInterest.score.desc()).all()
+        
+        return {
+            'user': current_user,
+            'posts': filtered_posts,
+            'interests': interests,
+            'friendship_status': 'SELF',
+            'pending_request_id': None
         } 

@@ -125,7 +125,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
 
   return (
     // Apply card class and post class
-    <div className="card post"> 
+    <div className="card post" data-cy={`post-${post.id}`}> 
       {/* Post Header */}
       <div className="post-header">
           <Link to={`/profile/${post.author?.username}`} className="post-author-link">

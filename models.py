@@ -45,7 +45,13 @@ class User(UserMixin, db.Model):
     interests = db.relationship('UserInterest', backref='user', lazy=True)
     invites_left = db.Column(db.Integer, default=3, nullable=False) # Max 3 invites per user initially
     issued_codes = db.relationship('InviteCode', backref='issuer', lazy=True, foreign_keys='InviteCode.issuer_id')
-    used_invite_code = db.Column(db.String(36), nullable=True) # Store the code used for registration
+    
+    # New field for invite tracking
+    invited_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    # Relationships for invite tracking
+    # User who invited this user
+    inviter = db.relationship('User', remote_side=[id], backref='invited_users', foreign_keys=[invited_by_user_id])
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -220,13 +226,14 @@ class UserInterest(db.Model):
 class InviteCode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    issuer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    is_used = db.Column(db.Boolean, default=False, nullable=False)
-    used_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) # User who registered with this code
+    issuer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # User who created the code (issuer)
+    is_used = db.Column(db.Boolean, default=False, nullable=False) 
+    used_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) # FK for who used the code
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # Define the relationship for the user who used the code
-    used_by = db.relationship('User', foreign_keys=[used_by_id])
+    # Relationship to the user who used the code (links via used_by_id)
+    used_by_user = db.relationship('User', foreign_keys=[used_by_id]) 
 
     def __repr__(self):
-        return f'<InviteCode {self.code} - Issued by {self.issuer_id} - Used: {self.is_used}>' 
+        used_status = f"Used by User ID: {self.used_by_id}" if self.used_by_id else "Not used"
+        return f'<InviteCode {self.code} - Issued by User ID: {self.issuer_id} - {used_status}>' 

@@ -40,18 +40,22 @@ def create_user_in_context(username, password, email, invite_code_str=None):
         new_user = User(
             username=username,
             email=email,
-            password_hash=hashed_password,
-            used_invite_code=invite_code_str
+            password_hash=hashed_password
         )
         db.session.add(new_user)
         # Flush required to get new_user.id *before* linking invite code
+        # Also needed to set invited_by_user_id if applicable
         db.session.flush()
 
         # 5. Mark the invite code as used and link to the new user IF an invite code was used
         if invite_code_obj:
             invite_code_obj.is_used = True
             invite_code_obj.used_by_id = new_user.id
+            new_user.invited_by_user_id = invite_code_obj.issuer_id # Set who invited this user
             db.session.add(invite_code_obj)
+            # We might need to add new_user to the session again if modified after flush
+            # but SQLAlchemy usually tracks changes to managed objects.
+            # db.session.add(new_user) # Likely not needed but for safety.
 
         # 6. Commit the transaction
         db.session.commit()
