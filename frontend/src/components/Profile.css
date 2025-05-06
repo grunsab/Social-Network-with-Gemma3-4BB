@@ -7,18 +7,10 @@
 
 .profile-header {
     display: flex;
-    align-items: flex-start; /* Align items to the top for upload button positioning */
+    align-items: center;
     gap: 1.5rem;
     margin-bottom: 1.5rem;
     flex-wrap: wrap; /* Allow wrapping on smaller screens */
-}
-
-.profile-picture-container {
-    position: relative; /* For positioning upload button or placeholder text */
-    display: flex;
-    flex-direction: column; /* Stack image and upload controls */
-    align-items: center; /* Center items in the column */
-    gap: 0.5rem; /* Space between picture and upload controls */
 }
 
 .profile-picture {
@@ -29,26 +21,8 @@
     border: 2px solid var(--border-color-dark); /* Optional border */
 }
 
-.profile-picture-placeholder {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    background-color: var(--border-color-dark);
-    color: var(--background-color-main);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.9em;
-    border: 2px solid var(--border-color-dark);
-}
-
 @media (prefers-color-scheme: light) {
     .profile-picture {
-        border-color: var(--border-color-light);
-    }
-    .profile-picture-placeholder {
-        background-color: var(--border-color-light);
-        color: var(--text-color-light-primary);
         border-color: var(--border-color-light);
     }
 }
@@ -322,74 +296,5 @@
 
     .profile-username {
         font-size: 1.3em; /* Further reduce font size */
-    }
-}
-
-.profile-picture-upload {
-    display: flex;
-    flex-direction: column; /* Stack label and button */
-    align-items: center;
-    gap: 0.5rem;
-    /* margin-top: 0.5rem; */ /* Spacing from the picture */
-}
-
-.profile-picture-upload .upload-button,
-.profile-picture-upload .confirm-upload-button {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
-    border-radius: var(--border-radius-small);
-    cursor: pointer;
-    border: 1px solid var(--border-color-dark);
-    background-color: var(--background-color-secondary);
-    color: var(--text-color-dark-primary);
-    transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
-    text-align: center;
-    min-width: 80px; /* Ensure buttons have a decent minimum width */
-}
-
-.profile-picture-upload .upload-button:hover,
-.profile-picture-upload .confirm-upload-button:hover {
-    background-color: var(--background-color-tertiary);
-    border-color: var(--primary-accent-color);
-}
-
-.profile-picture-upload .confirm-upload-button {
-    background-color: var(--primary-accent-color);
-    color: white; /* Or your primary button text color */
-    border-color: var(--primary-accent-color-dark);
-}
-
-.profile-picture-upload .confirm-upload-button:hover {
-    background-color: var(--primary-accent-color-dark);
-}
-
-.profile-picture-upload .confirm-upload-button:disabled {
-    background-color: var(--border-color-dark);
-    cursor: not-allowed;
-}
-
-@media (prefers-color-scheme: light) {
-    .profile-picture-upload .upload-button,
-    .profile-picture-upload .confirm-upload-button {
-        border-color: var(--border-color-light);
-        background-color: var(--background-color-secondary-light);
-        color: var(--text-color-light-primary);
-    }
-    .profile-picture-upload .upload-button:hover,
-    .profile-picture-upload .confirm-upload-button:hover {
-        background-color: #e9ecef; /* Lighter hover for light mode */
-        border-color: var(--primary-accent-color-light);
-    }
-
-    .profile-picture-upload .confirm-upload-button {
-        background-color: var(--primary-accent-color-light);
-        color: var(--text-color-dark-primary); /* Adjust if needed for light theme primary button */
-        border-color: var(--primary-accent-color);
-    }
-    .profile-picture-upload .confirm-upload-button:hover {
-        background-color: var(--primary-accent-color);
-    }
-    .profile-picture-upload .confirm-upload-button:disabled {
-        background-color: var(--border-color-light);
     }
 } 

@@ -264,26 +264,7 @@ def create_app(config_name='default'):
     print(f"!!! DEBUG: create_app FUNCTION CALLED    !!!")
     print(f"!!! DEBUG: config_name = {config_name}        !!!")
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    # Serve the main React app assets from frontend/dist via /app_assets
-    # Serve uploaded files (like profile pictures) from the uploads directory via /uploads
-    app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') 
-
-    # Add a new static route for uploads
-    # Note: Using a different static_url_path for uploads to avoid conflict
-    # with the primary static_folder for the React app assets.
-    # The static_folder argument here is relative to the app's root path.
-    # Create the 'uploads' directory if it doesn't exist, though file saving logic in profile.py also does this.
-    uploads_dir = os.path.join(app.root_path, '..', 'uploads') # Go up one level from app.py to project root, then to uploads
-    os.makedirs(uploads_dir, exist_ok=True) # Ensure uploads directory exists
-    # Serve the content of the 'uploads' directory under the '/uploads' URL path
-    # This configuration is a bit unusual. A more common way to add a second static folder is to use Blueprints
-    # or to register a new route with send_from_directory. 
-    # However, Flask allows multiple static_folder declarations with different static_url_paths but the behavior is
-    # that the *last one defined for a given static_url_path* takes precedence if paths overlap.
-    # A cleaner way for multiple distinct static asset locations is often to serve them via specific routes.
-
-    # For simplicity and to directly serve the 'uploads' folder at '/uploads', 
-    # we can add a specific route.
+    app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
 
     # Load configuration from the selected class
     app.config.from_object(config[config_name])
@@ -407,17 +388,6 @@ def create_app(config_name='default'):
     @app.route('/privacy')
     def privacy_policy():
         return render_template('privacy.html')
-
-    # Route to serve files from the UPLOADS_FOLDER
-    @app.route('/uploads/<path:filename>')
-    def serve_upload(filename):
-        # UPLOAD_FOLDER is defined in resources.profile as 'uploads/profile_pics'
-        # We need to make sure the path is relative to the application root for send_from_directory.
-        # Assuming UPLOAD_FOLDER in profile.py means 'project_root/uploads/profile_pics'
-        # app.root_path is typically the directory containing app.py
-        # We want to serve from project_root/uploads/
-        upload_dir_absolute = os.path.abspath(os.path.join(app.root_path, '..', 'uploads'))
-        return send_from_directory(upload_dir_absolute, filename)
 
     # --- Ampersounds Routes ---
 
