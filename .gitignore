@@ -159,3 +159,32 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 *.db
+
+# General Build & Cache artifacts
+build/
+dist/
+*.egg-info/
+.cache/
+# *.pyc # Already present as *.py[cod]
+# *.pyo # Already present as *.py[cod]
+# *.pyd # Already present as *.py[cod]
+# __pycache__/ # Already present
+
+# Test & Coverage Artifacts
+# .pytest_cache/ # Already present
+# .coverage # Already present
+# .coverage.* # Already present
+# htmlcov/ # Already present
+# nosetests.xml # Already present
+# coverage.xml # Already present
+# *.cover # Already present
+
+# IDE / Editor specific
+.vscode/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Logs
+# *.log # Already present (under Django stuff)

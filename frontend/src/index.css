@@ -1,0 +1,356 @@
+:root {
+  /* Modern Color Palette Variables (Dark Mode) */
+  --primary-color: #2dd4bf; /* Teal */
+  --primary-hover-color: #14b8a6; /* Darker Teal */
+  --background-color-light: #f8f9fa; /* Very Light Gray */
+  --text-color-light: #343a40; /* Dark Gray */
+  --background-color-dark: #1f1f23; /* Slightly lighter dark */
+  --text-color-dark: #e0e0e0; /* Softer white */
+  --input-background-light: #ffffff; /* White */
+  --input-background-dark: #2a2a2e; /* Darker card bg */
+  --border-color-light: #dee2e6; /* Light Gray */
+  --border-color-dark: #404044; /* Subtle dark border */
+  --card-background-light: #ffffff; /* White */
+  --card-background-dark: #2a2a2e; /* Distinct dark */
+  --nav-background-light: #ffffff; /* White */
+  --nav-background-dark: #1f1f23; /* Match body bg */
+  --error-color: #f47174; /* Softer Red */
+  --link-color-dark: #67e8f9; /* Cyan for links in dark mode */
+  --link-color-light: #0891b2; /* Darker Cyan for links in light mode */
+
+  /* Modern Typography */
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.6; /* Slightly more spacing */
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: var(--text-color-dark);
+  background-color: var(--background-color-dark);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}
+
+a {
+  font-weight: 500;
+  color: var(--link-color-dark); /* Updated link color */
+  text-decoration: none; /* Remove default underline */
+  transition: color 0.2s ease-in-out; /* Smooth color transition */
+}
+a:hover {
+  color: var(--primary-color);
+  text-decoration: underline; /* Underline on hover */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--background-color-dark);
+  color: var(--text-color-dark);
+}
+
+#root {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: 1em; /* Adjusted margin */
+  font-weight: 600; /* Slightly bolder headings */
+}
+
+h1 {
+  font-size: 2.2em; /* Slightly smaller */
+  line-height: 1.2;
+}
+
+h2 {
+    font-size: 1.8em;
+    line-height: 1.3;
+}
+
+h3 {
+    font-size: 1.4em;
+    line-height: 1.4;
+}
+
+p {
+  margin-top: 0;
+  margin-bottom: 1.2em; /* Slightly more paragraph spacing */
+}
+
+button {
+  border-radius: 6px; /* Slightly less rounded */
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--primary-color); /* Use primary color for background */
+  color: var(--background-color-dark); /* Dark text on primary button */
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out, opacity 0.2s ease-in-out; /* Smooth transitions */
+}
+button:hover {
+  background-color: var(--primary-hover-color);
+  border-color: transparent;
+}
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+button:disabled {
+    opacity: 0.5; /* Slightly more noticeable disabled state */
+    cursor: not-allowed;
+}
+
+/* Basic Form Styling */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+textarea,
+select {
+  display: block;
+  width: 100%;
+  padding: 0.75em 1em;
+  margin-bottom: 1em;
+  font-size: 1em;
+  font-family: inherit;
+  border: 1px solid var(--border-color-dark);
+  border-radius: 6px;
+  background-color: var(--input-background-dark);
+  color: var(--text-color-dark);
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.3); /* Subtle focus ring with primary color */
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5em;
+  font-weight: 500;
+}
+
+/* Basic Card Styling */
+.card {
+  background-color: var(--card-background-dark);
+  padding: 1.5rem 2rem; /* Adjusted padding */
+  border-radius: 8px; /* More rounded */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Softer, slightly larger shadow */
+  margin-bottom: 1.5rem; /* Consistent margin */
+  border: 1px solid var(--border-color-dark); /* Add border in dark mode too */
+}
+
+/* Basic Navigation Styling */
+nav {
+  background-color: var(--nav-background-dark);
+  padding: 0.75rem 2rem; /* Slightly adjust padding */
+  margin-bottom: 0; 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25); /* Slightly stronger shadow */
+  /* Add a subtle bottom border */
+  border-bottom: 1px solid var(--border-color-dark);
+  position: sticky; /* Make nav sticky */
+  top: 0;
+  z-index: 100; /* Ensure nav stays on top */
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 1.5rem; /* More space between nav items */
+}
+
+nav a {
+  color: var(--text-color-dark);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 0; /* Add padding for better click area */
+  border-bottom: 2px solid transparent; /* Prepare for active state indicator */
+  transition: color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+nav a:hover {
+    color: var(--primary-color);
+    text-decoration: none; /* Keep no underline on hover for nav */
+    border-bottom-color: transparent; /* Prevent underline style conflict */
+}
+
+nav a.active { /* Style for active link */
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color); /* Use border as active indicator */
+}
+
+/* Utility class for errors */
+.error-message {
+    color: var(--error-color);
+    background-color: rgba(244, 113, 116, 0.1);
+    border: 1px solid rgba(244, 113, 116, 0.3);
+    padding: 0.75em 1em;
+    border-radius: 6px;
+    font-size: 0.95em;
+    margin-top: 0; /* Reset top margin */
+    margin-bottom: 1em;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: var(--text-color-light);
+    background-color: var(--background-color-light);
+  }
+  body {
+      background-color: var(--background-color-light);
+      color: var(--text-color-light);
+  }
+  a {
+    color: var(--link-color-light); /* Updated link color */
+  }
+  a:hover {
+    color: var(--primary-hover-color);
+    text-decoration: underline;
+  }
+  button {
+    background-color: var(--primary-color);
+    color: var(--background-color-light); /* Light text on primary button */
+  }
+  button:hover {
+    background-color: var(--primary-hover-color);
+  }
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  textarea,
+  select {
+    background-color: var(--input-background-light);
+    border-color: var(--border-color-light);
+    color: var(--text-color-light);
+  }
+  input:focus,
+  textarea:focus,
+  select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2); /* Subtle focus ring */
+  }
+  .card {
+      background-color: var(--card-background-light);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); /* Lighter shadow */
+      border: 1px solid var(--border-color-light); /* Keep subtle border in light mode */
+  }
+    nav {
+      background-color: var(--nav-background-light);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Lighter shadow */
+      border-bottom: 1px solid var(--border-color-light);
+  }
+  nav a {
+      color: var(--text-color-light);
+  }
+  nav a:hover {
+      color: var(--primary-color);
+      border-bottom-color: transparent;
+  }
+  nav a.active {
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+  }
+   .error-message {
+        background-color: rgba(244, 113, 116, 0.08);
+        border-color: rgba(244, 113, 116, 0.2);
+    }
+}
+
+/* Utility Classes */
+.text-center {
+  text-align: center;
+}
+
+.d-block {
+  display: block;
+}
+
+.d-flex {
+  display: flex;
+}
+
+.align-items-center {
+  align-items: center;
+}
+
+.gap-1 {
+  gap: 1rem;
+}
+
+.mt-1 {
+  margin-top: 1rem;
+}
+
+.mt-small {
+    margin-top: 0.5em;
+}
+
+.mb-small {
+    margin-bottom: 0.2em;
+}
+
+.ms-auto { /* margin-start (left in LTR) auto */
+  margin-left: auto;
+}
+
+.w-auto {
+    width: auto;
+}
+
+.my-1 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.my-2 {
+  margin-top: 1.5rem; /* Example value, adjust as needed */
+  margin-bottom: 1.5rem;
+}
+
+/* Add more utilities as needed */
+
+/* Style for buttons containing icons */
+.icon-button {
+    display: inline-flex; /* Align icon and text */
+    align-items: center;
+    gap: 0.4em; /* Space between icon and text */
+}
+
+/* Ensure icons within buttons scale with font size and align well */
+.icon-button svg {
+    /* vertical-align: middle; */ /* Often helpful, but flex align-items handles it */
+    width: 1em; /* Scale with font size */
+    height: 1em;
+}

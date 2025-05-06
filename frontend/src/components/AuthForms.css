@@ -1,0 +1,37 @@
+/* Shared styles for Login.jsx and Register.jsx input groups */
+
+.input-group {
+    position: relative;
+    margin-bottom: 1.25rem; /* Consistent margin */
+}
+
+.input-group label {
+    /* Label styles are mostly inherited from index.css */
+    display: block;
+    margin-bottom: 0.4em;
+}
+
+.input-icon {
+    position: absolute;
+    left: 12px; /* Adjust horizontal position */
+    top: calc(50% + 6px); /* Adjust vertical position (approximate center of input) */
+    transform: translateY(-50%);
+    color: var(--text-color-dark); /* Match text color */
+    opacity: 0.4;
+    font-size: 0.9em; /* Slightly smaller icon */
+    pointer-events: none; /* Prevent icon from interfering with input focus */
+}
+
+/* Input field adjustments */
+.input-with-icon {
+    padding-left: 36px !important; /* Add padding to make space for the icon. Use !important to override index.css */
+    margin-bottom: 0; /* Override default input margin */
+}
+
+/* Adjust icon color in light mode if needed */
+@media (prefers-color-scheme: light) {
+    .input-icon {
+        color: var(--text-color-light);
+        opacity: 0.5;
+    }
+} 

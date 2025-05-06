@@ -1,0 +1,103 @@
+#root {
+  /* Keep this if you want a max-width container, but adjust as needed */
+  /* max-width: 1280px; */ /* Commented out, let index.css handle root */
+  /* margin: 0 auto; */    /* Commented out */
+  /* padding: 2rem; */     /* Commented out, handle padding in main content area */
+  /* text-align: center; */ /* Remove or adjust as needed */
+}
+
+/* Remove default Vite logo/animation styles if not used */
+/*
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+*/
+
+/* Add specific App layout styles here */
+.main-content {
+    padding: 2rem; /* Increase padding */
+    flex-grow: 1;
+    max-width: 1100px; /* Slightly narrower max-width */
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* Style for App Title/Logo in Nav */
+.nav-title {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: inherit; /* Use nav text color */
+    text-decoration: none;
+    margin-right: auto; /* Push navigation links to the right */
+}
+
+.nav-title:hover {
+    color: var(--primary-color); /* Use primary hover color */
+}
+
+/* Style the logout button */
+.logout-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--primary-color); /* Use theme color */
+  text-decoration: underline;
+  cursor: pointer;
+  align-items: center; /* Vertically align items if they wrap */
+  /* Ensure ul takes full width for title spacing */
+  width: 100%; 
+}
+
+.logout-button:hover {
+  color: var(--primary-hover-color);
+}
+
+/* Add success message styling */
+.success-message {
+    color: #4CAF50; /* Green color for success */
+    background-color: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    padding: 0.75em 1em;
+    border-radius: 4px;
+    margin-bottom: 1em;
+    font-size: 0.95em;
+}
+
+/* Adjust nav spacing/alignment if needed */
+nav ul {
+    align-items: center; /* Vertically align items if they wrap */
+}

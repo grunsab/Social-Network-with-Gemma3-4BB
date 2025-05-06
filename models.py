@@ -37,13 +37,21 @@ class FriendRequest(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
+    profile_picture = db.Column(db.String(512), nullable=True) # Add profile picture URL field
     posts = db.relationship('Post', backref='author', lazy=True)
     comments = db.relationship('Comment', backref='author', lazy=True)
     interests = db.relationship('UserInterest', backref='user', lazy=True)
     invites_left = db.Column(db.Integer, default=3, nullable=False) # Max 3 invites per user initially
     issued_codes = db.relationship('InviteCode', backref='issuer', lazy=True, foreign_keys='InviteCode.issuer_id')
-    used_invite_code = db.Column(db.String(36), nullable=True) # Store the code used for registration
+    
+    # New field for invite tracking
+    invited_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    # Relationships for invite tracking
+    # User who invited this user
+    inviter = db.relationship('User', remote_side=[id], backref='invited_users', foreign_keys=[invited_by_user_id])
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -52,17 +60,27 @@ class User(UserMixin, db.Model):
 
     def get_friends(self):
         """Returns a list of users who are friends (accepted requests)."""
+        friend_ids = self.get_friend_ids()
+        return User.query.filter(User.id.in_(friend_ids)).all()
+        
+    def get_friend_ids(self):
+        """Returns a set of friend IDs for the current user."""
         # Find accepted requests where the user is the sender
-        sent_accepted = FriendRequest.query.filter_by(sender_id=self.id, status=FriendRequestStatus.ACCEPTED).all()
-        friend_ids_sent = [req.receiver_id for req in sent_accepted]
+        sent_accepted = FriendRequest.query.with_entities(FriendRequest.receiver_id).filter_by(
+            sender_id=self.id, 
+            status=FriendRequestStatus.ACCEPTED
+        ).all()
+        friend_ids_sent = {req.receiver_id for req in sent_accepted}
 
         # Find accepted requests where the user is the receiver
-        received_accepted = FriendRequest.query.filter_by(receiver_id=self.id, status=FriendRequestStatus.ACCEPTED).all()
-        friend_ids_received = [req.sender_id for req in received_accepted]
+        received_accepted = FriendRequest.query.with_entities(FriendRequest.sender_id).filter_by(
+            receiver_id=self.id, 
+            status=FriendRequestStatus.ACCEPTED
+        ).all()
+        friend_ids_received = {req.sender_id for req in received_accepted}
 
-        # Combine IDs and get unique User objects
-        all_friend_ids = set(friend_ids_sent + friend_ids_received)
-        return User.query.filter(User.id.in_(all_friend_ids)).all()
+        # Combine IDs
+        return friend_ids_sent.union(friend_ids_received)
 
     def is_friend(self, user):
         """Checks if this user is friends with another user (accepted request exists)."""
@@ -149,7 +167,7 @@ class Post(db.Model):
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
     classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
     comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
-    category_scores = db.relationship('PostCategoryScore', backref='post', lazy=True, cascade='all, delete-orphan')
+    category_scores = db.relationship('PostCategoryScore', lazy=True, cascade='all, delete-orphan')
     privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
 
     def __repr__(self):
@@ -208,13 +226,14 @@ class UserInterest(db.Model):
 class InviteCode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    issuer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    is_used = db.Column(db.Boolean, default=False, nullable=False)
-    used_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) # User who registered with this code
+    issuer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # User who created the code (issuer)
+    is_used = db.Column(db.Boolean, default=False, nullable=False) 
+    used_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) # FK for who used the code
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # Define the relationship for the user who used the code
-    used_by = db.relationship('User', foreign_keys=[used_by_id])
+    # Relationship to the user who used the code (links via used_by_id)
+    used_by_user = db.relationship('User', foreign_keys=[used_by_id]) 
 
     def __repr__(self):
-        return f'<InviteCode {self.code} - Issued by {self.issuer_id} - Used: {self.is_used}>' 
+        used_status = f"Used by User ID: {self.used_by_id}" if self.used_by_id else "Not used"
+        return f'<InviteCode {self.code} - Issued by User ID: {self.issuer_id} - {used_status}>' 

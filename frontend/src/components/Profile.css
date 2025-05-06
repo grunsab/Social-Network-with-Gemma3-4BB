@@ -1,0 +1,115 @@
+/* Styles for Profile.jsx component */
+
+/* Use card styling for the main container */
+.profile-container {
+    /* You can add specific padding or margins if needed */
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.profile-picture {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-color-dark); /* Optional border */
+}
+
+@media (prefers-color-scheme: light) {
+    .profile-picture {
+        border-color: var(--border-color-light);
+    }
+}
+
+.profile-info {
+    flex-grow: 1;
+}
+
+.profile-username {
+    font-size: 1.8em;
+    font-weight: 600;
+    margin-bottom: 0.3em;
+}
+
+.profile-details p {
+    margin-bottom: 0.3em;
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.profile-actions {
+    margin: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem; /* Space between buttons/messages */
+    flex-wrap: wrap;
+}
+
+.profile-actions button {
+    /* Inherits base button styles */
+}
+
+.profile-actions .error-message {
+    margin: 0; /* Reset margin if needed */
+    flex-basis: 100%; /* Ensure error takes full width */
+    margin-top: 0.5rem;
+}
+
+.profile-actions .loading-indicator {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+/* Section styling */
+.profile-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: rgba(0, 0, 0, 0.05); /* Slightly different background */
+    border-radius: 8px;
+}
+
+@media (prefers-color-scheme: light) {
+    .profile-section {
+        background-color: rgba(0, 0, 0, 0.02);
+        border: 1px solid var(--border-color-light);
+    }
+}
+
+.profile-section h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color-dark);
+    padding-bottom: 0.5rem;
+}
+
+@media (prefers-color-scheme: light) {
+    .profile-section h3 {
+        border-bottom-color: var(--border-color-light);
+    }
+}
+
+.profile-interests ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.profile-interests li {
+    margin-bottom: 0.5em;
+    font-size: 0.95em;
+}
+
+.profile-posts .post {
+    /* Remove card background/padding if profile-section provides it */
+    /* background-color: transparent; */
+    /* padding: 0; */
+    /* box-shadow: none; */
+    /* border: 1px solid var(--border-color-light); */ 
+    /* Add border if needed for separation */
+} 
