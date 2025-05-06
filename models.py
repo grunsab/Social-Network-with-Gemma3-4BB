@@ -16,6 +16,29 @@ class PostPrivacy(enum.Enum):
     PUBLIC = 'public'  # Viewable by everyone
     FRIENDS = 'friends'  # Viewable only by friends
 
+# Enum for User Types
+class UserType(enum.Enum):
+    USER = 'user'
+    ADMIN = 'admin'
+
+# Enum for Reportable Content Types
+class ReportContentType(enum.Enum):
+    POST = 'post'
+    COMMENT = 'comment'
+    AMPERSOUND = 'ampersound'
+
+# Enum for Report Status
+class ReportStatus(enum.Enum):
+    PENDING = 'pending'
+    RESOLVED_AUTO = 'resolved_auto' # For admin auto-actions
+    RESOLVED_MANUAL = 'resolved_manual' # For other admin actions
+    DISMISSED = 'dismissed'
+
+# Enum for Comment Visibility
+class CommentVisibility(enum.Enum):
+    PUBLIC = 'public'
+    FRIENDS_ONLY = 'friends_only'
+
 # New FriendRequest model
 class FriendRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -40,6 +63,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     profile_picture = db.Column(db.String(512), nullable=True) # Add profile picture URL field
+    user_type = db.Column(db.Enum(UserType), default=UserType.USER, nullable=False) # Added user_type
     posts = db.relationship('Post', backref='author', lazy=True)
     comments = db.relationship('Comment', backref='author', lazy=True)
     interests = db.relationship('UserInterest', backref='user', lazy=True)
@@ -197,9 +221,32 @@ class Comment(db.Model):
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    visibility = db.Column(db.Enum(CommentVisibility), default=CommentVisibility.PUBLIC, nullable=False) # Added visibility
 
     def __repr__(self):
         return f'<Comment {self.content[:30]}...>'
+
+    def is_visible_to(self, user, post_author): # Added post_author argument
+        """Check if a comment is visible to a given user."""
+        # Comment author can always see their own comments
+        if self.user_id == user.id:
+            return True
+        
+        # If comment is public, anyone can see
+        if self.visibility == CommentVisibility.PUBLIC:
+            return True
+            
+        # If comment is friends_only, check friendship with comment author
+        if self.visibility == CommentVisibility.FRIENDS_ONLY:
+            # Check friendship between the viewing user and the comment author
+            comment_author = User.query.get(self.user_id)
+            if comment_author and comment_author.is_friend(user):
+                return True
+            # Also allow post author to see friends_only comments on their post
+            if post_author and post_author.id == user.id:
+                return True
+        
+        return False
 
 class PostCategoryScore(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -258,4 +305,52 @@ class Ampersound(db.Model):
     user = db.relationship('User', backref=db.backref('ampersounds', lazy=True))
 
     def __repr__(self):
-        return f'<Ampersound {self.id} @{self.user.username}&{self.name} (Plays: {self.play_count}) Privacy: {self.privacy}>' 
+        return f'<Ampersound {self.id} @{self.user.username}&{self.name} (Plays: {self.play_count}) Privacy: {self.privacy}>'
+
+    def is_visible_to(self, user):
+        """Check if an ampersound is visible to a given user."""
+        # Ampersound owner can always see their own ampersounds
+        if self.user_id == user.id:
+            return True
+        
+        # If public, anyone can see
+        if self.privacy == 'public': # Uses string 'public'
+            return True
+            
+        # If friends-only, check friendship
+        if self.privacy == 'friends': # Uses string 'friends'
+            amp_author = User.query.get(self.user_id)
+            if not amp_author: # Should not happen if data is consistent
+                return False
+            return amp_author.is_friend(user)
+            
+        return False
+
+# Report Model
+class Report(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    reporter_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reported_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    content_type = db.Column(db.Enum(ReportContentType), nullable=False)
+    # ID of the Post, Comment, or Ampersound being reported
+    content_id = db.Column(db.Integer, nullable=False) 
+    
+    reason = db.Column(db.Text, nullable=True) # Optional reason
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    status = db.Column(db.Enum(ReportStatus), default=ReportStatus.PENDING, nullable=False)
+
+    reporter = db.relationship('User', foreign_keys=[reporter_id], backref='filed_reports')
+    reported_user = db.relationship('User', foreign_keys=[reported_user_id], backref='reports_against')
+
+    # To make querying for reported content easier, you could add specific FKs, 
+    # but this requires knowing the content type first.
+    # For now, content_id is generic. A helper method might be useful later.
+
+    __table_args__ = (
+        # A user can only report a specific piece of content once
+        db.UniqueConstraint('reporter_id', 'content_type', 'content_id', name='uq_report_once_per_content'),
+    )
+
+    def __repr__(self):
+        return f'<Report {self.id} by User {self.reporter_id} on {self.content_type.value} {self.content_id}>' 

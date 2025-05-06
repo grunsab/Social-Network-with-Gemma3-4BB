@@ -6,6 +6,7 @@ import Spinner from './Spinner'; // Import Spinner
 import { FaTrashAlt, FaRegCommentDots, FaPlay } from 'react-icons/fa'; // Import Trash, Comment icons, and Play icon
 import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
 import { useAmpersoundAutocomplete } from '../hooks/useAmpersoundAutocomplete'; // Import the hook
+import ReportButton from './ReportButton'; // Import the ReportButton component
 
 // Basic styling for the component -- REMOVED
 // const postStyle = { ... };
@@ -285,23 +286,32 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
       )}
       
       {/* Post Footer/Actions */}
-      <div className="post-footer"> 
-        <span className="post-privacy">Privacy: {post.privacy}</span>
-        {isAuthor && (
-           <button onClick={handleDelete} className="post-delete-button icon-button">
-             <FaTrashAlt /> {/* Add Trash Icon */} 
-             <span>Delete Post</span>
-           </button>
-        )}
+      <div className="post-footer">
+        <div className="post-actions">
+            {/* Toggle Comments Button */}
+            <button onClick={() => setShowComments(!showComments)} className="icon-button" title={showComments ? "Hide Comments" : "Show Comments"}>
+                <FaRegCommentDots /> <span className="post-action-label">{showComments ? 'Hide' : 'Comments'} ({comments.length > 0 ? comments.length : post.comment_count || 0})</span>
+            </button>
+
+            {/* Delete Button - only for author */}
+            {isAuthor && (
+                <button onClick={handleDelete} className="icon-button delete-button" title="Delete Post">
+                    <FaTrashAlt /> <span className="post-action-label">Delete</span>
+                </button>
+            )}
+            {/* Report Button for Post */}
+            {!isAuthor && currentUser && (
+                 <ReportButton 
+                    contentId={post.id} 
+                    contentType="post" 
+                    reportedUserId={post.author?.id}
+                />
+            )}
+        </div>
       </div>
 
       {/* --- Comments Section --- */}
       <div className="post-comments-section"> 
-        <button onClick={() => setShowComments(!showComments)} className="toggle-comments-button">
-          <FaRegCommentDots style={{ marginRight: '0.4em', verticalAlign: 'middle' }} /> {/* Comment Icon */} 
-          {showComments ? 'Hide' : 'Show'} Comments ({comments.length > 0 ? comments.length : '...'}) 
-        </button>
-
         {showComments && (
           <div>
             {loadingComments && <Spinner contained={true} />} {/* Use spinner for loading comments */} 
@@ -327,6 +337,14 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
                         className="comment-delete-button icon-button">
                         <FaTrashAlt /> {/* Add Trash Icon */} 
                     </button>
+                 )}
+                 {/* Report Button for Comment */}
+                 {currentUser && currentUser.id !== comment.author?.id && (
+                    <ReportButton 
+                        contentId={comment.id} 
+                        contentType="comment" 
+                        reportedUserId={comment.author?.id}
+                    />
                  )}
               </div>
             ))}

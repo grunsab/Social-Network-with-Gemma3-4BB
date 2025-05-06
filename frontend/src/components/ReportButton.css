@@ -1,0 +1,102 @@
+.report-button {
+  background: none;
+  border: none;
+  color: #757575; /* Lighter gray for less emphasis */
+  cursor: pointer;
+  padding: 5px;
+  margin-left: 8px; /* Space it out from other icons/text */
+  font-size: 0.9em; /* Slightly smaller than main text */
+}
+
+.report-button:hover {
+  color: #c21807; /* Red on hover */
+}
+
+.report-button-success {
+  color: green;
+  font-size: 0.9em;
+  margin-left: 8px;
+}
+
+/* Modal styles */
+.report-confirmation-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6); /* Darker overlay */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050; /* Ensure it's above other content */
+}
+
+.report-confirmation-content {
+  background-color: #fff;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 450px;
+  text-align: left; /* Align text to left */
+}
+
+.report-confirmation-content h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.report-confirmation-content p {
+  margin-bottom: 15px;
+  color: #555;
+}
+
+.report-confirmation-content textarea {
+  width: calc(100% - 20px); /* Full width minus padding */
+  padding: 10px;
+  margin-bottom: 20px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.report-confirmation-actions {
+  display: flex;
+  justify-content: flex-end; /* Align buttons to the right */
+  gap: 10px; /* Space between buttons */
+}
+
+.report-confirmation-actions button {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.report-confirmation-actions button.confirm {
+  background-color: #d9534f; /* Red for confirm */
+  color: white;
+}
+
+.report-confirmation-actions button.confirm:hover {
+  background-color: #c9302c;
+}
+
+.report-confirmation-actions button.cancel {
+  background-color: #f0f0f0; /* Light gray for cancel */
+  color: #333;
+}
+
+.report-confirmation-actions button.cancel:hover {
+  background-color: #e0e0e0;
+}
+
+.report-confirmation-content .error-message {
+    color: #d9534f; /* Red for error messages */
+    margin-bottom: 10px;
+    font-size: 0.9em;
+} 

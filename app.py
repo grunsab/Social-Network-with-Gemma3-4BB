@@ -24,7 +24,7 @@ from extensions import db, login_manager, migrate
 from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy, Ampersound
 
 # Import Resources AFTER defining configurations and extensions
-from resources.auth import UserRegistration, UserLogin
+from resources.auth import UserRegistration, UserLogin, UserLogout
 from resources.post import PostListResource, PostResource
 from resources.comment import CommentListResource, CommentResource
 from resources.profile import ProfileResource, MyProfileResource, profile_data_fields
@@ -32,6 +32,7 @@ from resources.friendship import FriendRequestListResource, FriendRequestResourc
 from resources.feed import FeedResource
 from resources.category import CategoryResource
 from resources.invite import InviteResource
+from resources.report import ReportResource
 
 # Load environment variables early
 load_dotenv()
@@ -283,8 +284,11 @@ def create_app(config_name='default'):
     # Custom unauthorized handler for APIs
     @login_manager.unauthorized_handler
     def unauthorized():
-        # Return JSON 401 response instead of redirecting
-        return jsonify(message="Authentication required."), 401
+        # Return a JSON response, which is typical for APIs
+        # Flask-RESTful might also handle this, but explicit is good.
+        response = jsonify(message="Authentication required.")
+        response.status_code = 401
+        return response
 
     # Initialize S3 client if config is present
     s3_client = None
@@ -311,6 +315,7 @@ def create_app(config_name='default'):
     # Add API Resources using the 'api' instance initialized above
     api.add_resource(UserRegistration, '/api/v1/register')
     api.add_resource(UserLogin, '/api/v1/login')
+    api.add_resource(UserLogout, '/api/v1/logout')
     api.add_resource(PostListResource, '/api/v1/posts')
     api.add_resource(PostResource, '/api/v1/posts/<int:post_id>')
     api.add_resource(CommentListResource, '/api/v1/posts/<int:post_id>/comments')
@@ -321,7 +326,8 @@ def create_app(config_name='default'):
     api.add_resource(FriendshipResource, '/api/v1/friendships/<int:user_id>')
     api.add_resource(FeedResource, '/api/v1/feed')
     api.add_resource(CategoryResource, '/api/v1/categories/<string:category_name>/posts')
-    api.add_resource(InviteResource, '/api/v1/invites')
+    api.add_resource(InviteResource, '/api/v1/invites', '/api/v1/invites/<string:code>')
+    api.add_resource(ReportResource, '/api/v1/reports')
 
     # --- Manually add routes for MyProfileResource --- 
     # Instantiate the resource once (though it's stateless here)

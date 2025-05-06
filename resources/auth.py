@@ -119,3 +119,9 @@ class UserLogin(Resource):
         # Clear any session data if needed, Flask-Login handles the user session part
         session.clear() # Example: clear the whole session
         return {'message': 'Logout successful'}, 200 
+
+class UserLogout(Resource):
+    @login_required
+    def post(self): # Typically logout is a POST to prevent CSRF if it changes state
+        logout_user()
+        return {'message': 'Successfully logged out'}, 200 

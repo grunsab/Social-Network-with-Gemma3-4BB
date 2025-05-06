@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom'; // For linking to user profiles
+import { useAuth } from '../context/AuthContext'; // Import useAuth
 import Spinner from './Spinner';
 import { FaPlay, FaPause } from 'react-icons/fa'; // Import Play/Pause icons
+import ReportButton from './ReportButton'; // Import ReportButton
 import './PopularAmpersoundsPage.css'; // Import the CSS file
 // You might want a specific CSS file for this page later
 // import './PopularAmpersoundsPage.css';
 
 const PopularAmpersoundsPage = () => {
+    const { currentUser } = useAuth(); // Get currentUser
     const [ampersounds, setAmpersounds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -155,6 +158,14 @@ const PopularAmpersoundsPage = () => {
                                      - {sound.play_count ?? 0} plays
                                 </span>
                             </div>
+                            {/* Report Button for Ampersound */}
+                            {currentUser && currentUser.id !== sound.user.id && (
+                                <ReportButton 
+                                    contentId={sound.id} 
+                                    contentType="ampersound" 
+                                    reportedUserId={sound.user.id}
+                                />
+                            )}
                         </li>
                     ))}
                 </ul>
