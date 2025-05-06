@@ -55,24 +55,16 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
   };
 
   // Wrap the hook's suggestion click handler
-  const handleLocalSuggestionClick = (suggestion) => { // Accept the full suggestion object
-    hookHandleSuggestionClick(suggestion.tag, content, setContent); // Insert the tag
+  const handleLocalSuggestionClick = (suggestion) => { 
+    hookHandleSuggestionClick(suggestion.tag, content, setContent); // Insert tag, hide suggestions, schedule focus
 
-    // Play the selected sound.
-    // handlePreviewSound will take care of stopping any previous preview.
-    if (suggestion.url) {
-      // Create a pseudo-event object as handlePreviewSound expects an event as the first argument.
+    // Delay playing the sound slightly to allow focus changes from the hook to settle.
+    setTimeout(() => {
       const pseudoEvent = { stopPropagation: () => {} };
-      handlePreviewSound(pseudoEvent, suggestion.url);
-    } else {
-      // If the clicked suggestion has no URL, ensure any active preview is stopped.
-      // This case should be rare for Ampersounds but is good defensive programming.
-      if (previewAudio) {
-        previewAudio.pause();
-        setPreviewAudio(null); // This will trigger useEffect cleanup for the old audio.
-      }
-    }
-    // The hook's handleSuggestionClick already hides suggestions.
+      // handlePreviewSound will stop any currently playing audio and then play the new one if URL is provided.
+      // It will also handle the case where suggestion.url is null/undefined by just stopping previous audio.
+      handlePreviewSound(pseudoEvent, suggestion.url || null);
+    }, 50); // 50ms delay, adjust if needed
   };
 
   const handleImageChange = (event) => {
@@ -150,16 +142,14 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
     event.stopPropagation(); 
     setPreviewError('');
     
-    // If there's an existing audio object in state, pause it immediately.
-    // Then, set the state to null, which will trigger the useEffect cleanup for the old object.
     if (previewAudio) { 
         previewAudio.pause();
-        setPreviewAudio(null);
+        setPreviewAudio(null); // Triggers useEffect cleanup for the old audio object
     }
 
-    if (!soundUrl) {
-        setPreviewError('No preview available.');
-        return; // Don't set loading true if no URL
+    if (!soundUrl) { // If no URL, we've already stopped/cleaned up. Nothing more to do.
+        setIsPreviewLoading(false); // Ensure loading spinner (if any from preview button) is off
+        return; 
     }
 
     setIsPreviewLoading(true);
