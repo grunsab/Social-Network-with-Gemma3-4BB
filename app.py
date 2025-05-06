@@ -71,10 +71,23 @@ migrate.init_app(app, db)
 
 class GemmaClassification:
     def __init__(self):
-        self.categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment",
-                "Music", "Movies", "TV", "Gaming", "Anime", "Manga", "Work", "Gossip", "Relationships", "Philosophy", "Spirituality",
-                "Health", "Fitness", "Beauty", "Fashion", "Pets", "Astronomy", "Mathematics", "History", "Geography", "Literature",  "Nature", 
-                "Animals", "Weather", "Space", "Astrology", "Physics", "Chemistry", "Biology", "Animated", "Video Games", "Comics", "Drawings", "Other"]
+        # self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # self.load_models()
+        # self.load_clip_model()
+        # Load categories from JSON file
+        categories_path = os.path.join(os.path.dirname(__file__), 'categories.json')
+        try:
+            with open(categories_path, 'r') as f:
+                self.categories = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: categories.json not found at {categories_path}")
+            # Fallback or default categories if file not found
+            self.categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment"]
+        except json.JSONDecodeError:
+            print(f"Error: Could not decode JSON from {categories_path}")
+             # Fallback or default categories if JSON is invalid
+            self.categories = ["Technology", "Travel", "Food", "Art", "Sports", "News", "Lifestyle", "Politics", "Science", "Business", "Entertainment"]
+
         self.model = MODEL_NAME
         self.max_tokens = 1024
         self.response_format = {"type": "json_object"}
