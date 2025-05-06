@@ -37,7 +37,9 @@ class FriendRequest(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
+    profile_picture = db.Column(db.String(512), nullable=True) # Add profile picture URL field
     posts = db.relationship('Post', backref='author', lazy=True)
     comments = db.relationship('Comment', backref='author', lazy=True)
     interests = db.relationship('UserInterest', backref='user', lazy=True)
@@ -52,17 +54,27 @@ class User(UserMixin, db.Model):
 
     def get_friends(self):
         """Returns a list of users who are friends (accepted requests)."""
+        friend_ids = self.get_friend_ids()
+        return User.query.filter(User.id.in_(friend_ids)).all()
+        
+    def get_friend_ids(self):
+        """Returns a set of friend IDs for the current user."""
         # Find accepted requests where the user is the sender
-        sent_accepted = FriendRequest.query.filter_by(sender_id=self.id, status=FriendRequestStatus.ACCEPTED).all()
-        friend_ids_sent = [req.receiver_id for req in sent_accepted]
+        sent_accepted = FriendRequest.query.with_entities(FriendRequest.receiver_id).filter_by(
+            sender_id=self.id, 
+            status=FriendRequestStatus.ACCEPTED
+        ).all()
+        friend_ids_sent = {req.receiver_id for req in sent_accepted}
 
         # Find accepted requests where the user is the receiver
-        received_accepted = FriendRequest.query.filter_by(receiver_id=self.id, status=FriendRequestStatus.ACCEPTED).all()
-        friend_ids_received = [req.sender_id for req in received_accepted]
+        received_accepted = FriendRequest.query.with_entities(FriendRequest.sender_id).filter_by(
+            receiver_id=self.id, 
+            status=FriendRequestStatus.ACCEPTED
+        ).all()
+        friend_ids_received = {req.sender_id for req in received_accepted}
 
-        # Combine IDs and get unique User objects
-        all_friend_ids = set(friend_ids_sent + friend_ids_received)
-        return User.query.filter(User.id.in_(all_friend_ids)).all()
+        # Combine IDs
+        return friend_ids_sent.union(friend_ids_received)
 
     def is_friend(self, user):
         """Checks if this user is friends with another user (accepted request exists)."""
@@ -149,7 +161,7 @@ class Post(db.Model):
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
     classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
     comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
-    category_scores = db.relationship('PostCategoryScore', backref='post', lazy=True, cascade='all, delete-orphan')
+    category_scores = db.relationship('PostCategoryScore', lazy=True, cascade='all, delete-orphan')
     privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
 
     def __repr__(self):

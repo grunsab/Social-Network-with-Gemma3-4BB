@@ -1,0 +1,186 @@
+/* Styles for Post.jsx component */
+
+.post {
+    /* Inherits card styles, add specific overrides if needed */
+    /* Example: margin-bottom: 1.5rem; */
+}
+
+.post-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.post-author-link {
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit; /* Inherit color from card */
+}
+.post-author-link:hover {
+    text-decoration: underline;
+}
+
+.post-timestamp {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+.post-image {
+    max-width: 100%;
+    max-height: 500px; /* Adjust as needed */
+    margin-top: 0.75rem;
+    margin-bottom: 0.5rem;
+    display: block; 
+    border-radius: 6px; /* Optional rounding */
+}
+
+.post-content {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    white-space: pre-wrap; /* Preserve line breaks */
+    line-height: 1.6;
+}
+
+.post-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    font-size: 0.9em;
+    border-top: 1px solid var(--border-color-dark); /* Use theme border */
+    padding-top: 0.75rem;
+}
+
+@media (prefers-color-scheme: light) {
+    .post-footer {
+        border-top: 1px solid var(--border-color-light);
+    }
+}
+
+.post-privacy {
+    opacity: 0.8;
+}
+
+.post-delete-button {
+    color: var(--error-color); /* Use theme error color */
+    background: none;
+    border: none;
+    padding: 0.2em 0.5em;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.post-delete-button:hover {
+    background-color: rgba(255, 77, 77, 0.1);
+}
+
+.post-categories {
+    margin-top: 0.75rem;
+    font-size: 0.9em;
+    opacity: 0.9;
+}
+
+.post-categories strong {
+    margin-right: 0.5em;
+}
+
+.post-categories a {
+    font-weight: normal;
+    /* Color is inherited from index.css */
+}
+
+/* Comments Section */
+.post-comments-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color-dark);
+}
+
+@media (prefers-color-scheme: light) {
+    .post-comments-section {
+        border-top: 1px solid var(--border-color-light);
+    }
+}
+
+.toggle-comments-button {
+    /* Inherits button styles, can add specific overrides */
+    font-size: 0.9em;
+    padding: 0.4em 0.8em;
+    margin-bottom: 1rem;
+}
+
+.comment {
+    background-color: rgba(0, 0, 0, 0.1); /* Subtle background */
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid transparent; /* Maintain layout consistency */
+}
+
+@media (prefers-color-scheme: light) {
+    .comment {
+        background-color: rgba(0, 0, 0, 0.03);
+        border: 1px solid var(--border-color-light);
+    }
+}
+
+.comment-author-link {
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+    margin-right: 0.4em;
+}
+.comment-author-link:hover {
+    text-decoration: underline;
+}
+
+.comment-timestamp {
+    display: block; /* Put timestamp on new line */
+    font-size: 0.8em;
+    opacity: 0.7;
+    margin-top: 0.25em;
+}
+
+.comment-delete-button {
+    color: var(--error-color);
+    background: none;
+    border: none;
+    padding: 0 0.3em;
+    margin-left: 0.75rem;
+    cursor: pointer;
+    font-size: 0.85em;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+.comment-delete-button:hover {
+    opacity: 1;
+}
+
+.comment-form {
+    margin-top: 1.5rem;
+    display: flex;
+    align-items: flex-start; /* Align top */
+    gap: 0.75rem;
+}
+
+.comment-form textarea {
+    flex-grow: 1; /* Take available space */
+    margin-bottom: 0; /* Remove default margin from index.css */
+    min-height: 40px; /* Ensure minimum height */
+}
+
+.comment-form button {
+    /* Inherits button styles */
+    height: 40px; /* Match textarea roughly */
+    align-self: flex-end; /* Align button to bottom if textarea grows */
+}
+
+.comment-form .error-message {
+    /* Adjust error message position if needed */
+    width: 100%;
+    margin-top: 0.5em;
+    flex-basis: 100%; /* Ensure it takes full width below input/button */
+} 
