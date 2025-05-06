@@ -20,9 +20,9 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
     suggestions,
     showSuggestions,
     loadingSuggestions,
-    suggestionsRef,
-    handleContentChange: hookHandleContentChange, // Rename to avoid conflict if needed, or use directly
-    handleSuggestionClick: hookHandleSuggestionClick, // Rename
+    suggestionListProps,
+    handleContentChange: hookHandleContentChange,
+    handleSuggestionClick: hookHandleSuggestionClick,
     hideSuggestions
   } = useAmpersoundAutocomplete(textareaRef);
 
@@ -215,7 +215,7 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
           {/* Suggestions Dropdown */} 
           {showSuggestions && suggestions.length > 0 && (
             <ul 
-                ref={suggestionsRef} 
+                {...suggestionListProps}
                 className="ampersound-suggestions" 
             >
                 {loadingSuggestions && <li className="suggestion-item-loading">Loading...</li>}

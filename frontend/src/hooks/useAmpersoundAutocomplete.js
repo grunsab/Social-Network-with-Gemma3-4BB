@@ -23,6 +23,7 @@ export function useAmpersoundAutocomplete(textareaRef) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const suggestionsRef = useRef(null); // Ref for suggestions container
+  const interactingWithSuggestionsRef = useRef(false); // New ref to track interaction
 
   // Debounced fetch function
   const debouncedFetchSuggestions = useCallback(
@@ -119,15 +120,39 @@ export function useAmpersoundAutocomplete(textareaRef) {
 
   // Function to manually hide suggestions (e.g., on blur or submit)
   const hideSuggestions = useCallback(() => {
+      // If the user is currently interacting (mouse down) with the suggestions list,
+      // don't hide it. This allows clicks on buttons within the list (like preview)
+      // without closing the list due to the textarea blurring.
+      if (interactingWithSuggestionsRef.current) {
+          return;
+      }
       setShowSuggestions(false);
       debouncedFetchSuggestions.cancel();
   }, [debouncedFetchSuggestions]);
+
+  // Attach mouse down/up listeners to the suggestions list itself
+  // This is necessary so the component using the hook can spread these props
+  // onto the suggestions ul element.
+  const suggestionListProps = {
+    ref: suggestionsRef,
+    onMouseDown: () => {
+      interactingWithSuggestionsRef.current = true;
+    },
+    onMouseUp: () => {
+      interactingWithSuggestionsRef.current = false;
+    },
+    // Optional: onMouseLeave might be useful in some cases,
+    // but onMouseUp should cover most scenarios.
+    // onMouseLeave: () => {
+    //   interactingWithSuggestionsRef.current = false;
+    // }
+  };
 
   return {
     suggestions,
     showSuggestions,
     loadingSuggestions,
-    suggestionsRef, // Pass the ref for the suggestions UL element
+    suggestionListProps, // Pass these props to be spread on the UL
     handleContentChange, // Let the component call this on textarea change
     handleSuggestionClick, // Let the component call this when a suggestion LI is clicked
     hideSuggestions // Function to manually hide

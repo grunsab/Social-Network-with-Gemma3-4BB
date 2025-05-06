@@ -29,7 +29,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
     suggestions: commentSuggestions,
     showSuggestions: showCommentSuggestions,
     loadingSuggestions: loadingCommentSuggestions,
-    suggestionsRef: commentSuggestionsRef,
+    suggestionListProps: commentSuggestionListProps,
     handleContentChange: hookHandleCommentChange, 
     handleSuggestionClick: hookHandleCommentSuggestionClick,
     hideSuggestions: hideCommentSuggestions
@@ -348,7 +348,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
                 {/* Comment Suggestions Dropdown */} 
                 {showCommentSuggestions && commentSuggestions.length > 0 && (
                   <ul 
-                      ref={commentSuggestionsRef} 
+                      {...commentSuggestionListProps}
                       className="ampersound-suggestions" 
                   >
                       {loadingCommentSuggestions && <li className="suggestion-item-loading">Loading...</li>}
