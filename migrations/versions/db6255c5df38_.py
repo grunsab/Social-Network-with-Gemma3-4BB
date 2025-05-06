@@ -27,7 +27,7 @@ def upgrade():
 
     # Step 2: Populate existing rows with unique placeholder emails
     # Use CAST(id AS TEXT) for compatibility, especially with PostgreSQL if used later.
-    op.execute("UPDATE user SET email = 'user_' || CAST(id AS TEXT) || '@example.com' WHERE email IS NULL")
+    op.execute("UPDATE \"user\" SET email = 'user_' || CAST(id AS TEXT) || '@example.com' WHERE email IS NULL")
 
     # Step 3: Apply NOT NULL and UNIQUE constraints
     with op.batch_alter_table('user', schema=None) as batch_op:
