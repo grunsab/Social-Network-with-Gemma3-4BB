@@ -246,6 +246,7 @@ class Ampersound(db.Model):
     file_path = db.Column(db.String(512), nullable=False) # Path to the audio file
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     play_count = db.Column(db.Integer, default=0, nullable=False, index=True) # New field for tracking plays
+    privacy = db.Column(db.String(50), default='public', nullable=False) # 'public' or 'friends'
 
     # Define a unique constraint for user_id and name
     __table_args__ = (
@@ -257,4 +258,4 @@ class Ampersound(db.Model):
     user = db.relationship('User', backref=db.backref('ampersounds', lazy=True))
 
     def __repr__(self):
-        return f'<Ampersound {self.id} @{self.user.username}&{self.name} (Plays: {self.play_count})>' 
+        return f'<Ampersound {self.id} @{self.user.username}&{self.name} (Plays: {self.play_count}) Privacy: {self.privacy}>' 

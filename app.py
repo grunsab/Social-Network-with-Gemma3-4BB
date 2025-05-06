@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_login import login_required, current_user
 from flask_restful import Api
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import or_, func, case, desc, union_all
+from sqlalchemy import or_, func, case, desc, union_all, and_
 from sqlalchemy.orm import joinedload, undefer
 from dotenv import load_dotenv
 import boto3
@@ -410,6 +410,10 @@ def create_app(config_name='default'):
             return jsonify({"message": "No audio file part"}), 400
         file = request.files['audio_file']
         name = request.form.get('name')
+        privacy = request.form.get('privacy', 'public').lower()
+
+        if privacy not in ['public', 'friends']:
+            privacy = 'public' # Default to public if invalid value is provided
 
         if not name:
             return jsonify({"message": "Ampersound name is required"}), 400
@@ -464,7 +468,8 @@ def create_app(config_name='default'):
                 ampersound = Ampersound(
                     user_id=current_user.id,
                     name=clean_name,
-                    file_path=s3_filename # Store S3 key/path
+                    file_path=s3_filename, # Store S3 key/path
+                    privacy=privacy
                 )
                 db.session.add(ampersound)
                 db.session.commit()
@@ -487,6 +492,18 @@ def create_app(config_name='default'):
         ampersound = Ampersound.query.filter_by(user_id=user.id, name=clean_sound_name).first()
         if not ampersound:
             return jsonify({"message": "Ampersound not found"}), 404
+
+        # Privacy check
+        can_view = False
+        if ampersound.privacy == 'public':
+            can_view = True
+        elif ampersound.privacy == 'friends':
+            if current_user.is_authenticated:
+                if ampersound.user_id == current_user.id or current_user.is_friend(ampersound.user):
+                    can_view = True
+        
+        if not can_view:
+            return jsonify({"message": "You do not have permission to view this Ampersound"}), 403
 
         # Increment play_count
         try:
@@ -515,7 +532,13 @@ def create_app(config_name='default'):
                     return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
                 file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
             
-            return jsonify({"name": ampersound.name, "url": file_url, "user": user.username, "play_count": ampersound.play_count}), 200
+            return jsonify({
+                "name": ampersound.name, 
+                "url": file_url, 
+                "user": user.username, 
+                "play_count": ampersound.play_count,
+                "privacy": ampersound.privacy # Include privacy in response
+            }), 200
         except Exception as e:
             app.logger.error(f"Error generating Ampersound URL for {ampersound.id}: {e}")
             return jsonify({"message": "Error retrieving Ampersound URL."}), 500
@@ -555,19 +578,38 @@ def create_app(config_name='default'):
                 'name': ampersound.name,
                 'file_path': ampersound.file_path, # Or use the generated file_url
                 'url': file_url, # The generated playable URL
-                'timestamp': ampersound.timestamp.isoformat()
+                'timestamp': ampersound.timestamp.isoformat(),
+                'privacy': ampersound.privacy # Include privacy setting
             })
         
         return jsonify(results), 200
 
     @app.route('/api/v1/ampersounds/all', methods=['GET'])
     def list_all_ampersounds():
-        all_ampersounds = (
+        base_query = (
             Ampersound.query
             .join(User, User.id == Ampersound.user_id)
-            .options(joinedload(Ampersound.user))  # Eager load user details
-            .order_by(Ampersound.play_count.desc(), Ampersound.timestamp.desc()) # Sort by play_count DESC, then timestamp DESC
-            .limit(50)  # Limit to 50 for now
+            .options(joinedload(Ampersound.user))
+        )
+
+        if current_user.is_authenticated:
+            friend_ids = current_user.get_friend_ids()
+            # Show public ampersounds OR friends-only ampersounds from friends OR ampersounds owned by the current user
+            base_query = base_query.filter(
+                or_(
+                    Ampersound.privacy == 'public',
+                    and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
+                    Ampersound.user_id == current_user.id # Always show user's own ampersounds
+                )
+            )
+        else:
+            # For anonymous users, only show public ampersounds
+            base_query = base_query.filter(Ampersound.privacy == 'public')
+
+        all_ampersounds = (
+            base_query
+            .order_by(Ampersound.play_count.desc(), Ampersound.timestamp.desc())
+            .limit(50)
             .all()
         )
 
@@ -604,7 +646,8 @@ def create_app(config_name='default'):
                 },
                 'url': file_url,
                 'timestamp': ampersound.timestamp.isoformat(),
-                'play_count': ampersound.play_count # Include play_count in response
+                'play_count': ampersound.play_count, # Include play_count in response
+                'privacy': ampersound.privacy # Include privacy in response
             })
         
         return jsonify(results), 200
@@ -658,6 +701,7 @@ def create_app(config_name='default'):
         results = []
         username_part = None
         soundname_part = None
+        base_query = Ampersound.query.join(User, User.id == Ampersound.user_id)
 
         if '.' in query_term:
             parts = query_term.split('.', 1)
@@ -665,27 +709,34 @@ def create_app(config_name='default'):
             soundname_part = parts[1]
             username_pattern = f"{username_part}%"
             soundname_pattern = f"{soundname_part}%"
-            ampersounds_query = (
-                Ampersound.query
-                .join(User, User.id == Ampersound.user_id)
-                .filter(
-                    func.lower(User.username).ilike(username_pattern),
-                    func.lower(Ampersound.name).ilike(soundname_pattern)
-                )
-                .options(joinedload(Ampersound.user))
-                .order_by(User.username, Ampersound.name)
-                .limit(limit)
+            base_query = base_query.filter(
+                func.lower(User.username).ilike(username_pattern),
+                func.lower(Ampersound.name).ilike(soundname_pattern)
             )
         else:
             soundname_pattern = f"{query_term}%"
-            ampersounds_query = (
-                Ampersound.query
-                .join(User, User.id == Ampersound.user_id)
-                .filter(func.lower(Ampersound.name).ilike(soundname_pattern))
-                .options(joinedload(Ampersound.user))
-                .order_by(Ampersound.name, User.username) 
-                .limit(limit)
+            base_query = base_query.filter(func.lower(Ampersound.name).ilike(soundname_pattern))
+
+        # Apply privacy filtering
+        if current_user.is_authenticated:
+            friend_ids = current_user.get_friend_ids()
+            base_query = base_query.filter(
+                or_(
+                    Ampersound.privacy == 'public',
+                    and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
+                    Ampersound.user_id == current_user.id
+                )
             )
+        else:
+            # Anonymous users only see public results in search too
+            base_query = base_query.filter(Ampersound.privacy == 'public')
+
+        ampersounds_query = (
+            base_query
+            .options(joinedload(Ampersound.user))
+            .order_by(User.username, Ampersound.name) # Consider if order_by needs adjustment post-privacy
+            .limit(limit)
+        )
 
         found_ampersounds = ampersounds_query.all()
         
@@ -719,7 +770,8 @@ def create_app(config_name='default'):
                 "tag": tag,
                 "owner": sound.user.username,
                 "name": sound.name,
-                "url": file_url # Add the generated URL
+                "url": file_url, # Add the generated URL
+                "privacy": sound.privacy # Include privacy setting
             })
 
         return jsonify(results)

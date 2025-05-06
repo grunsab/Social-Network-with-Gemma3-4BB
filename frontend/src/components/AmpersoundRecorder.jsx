@@ -5,6 +5,7 @@ const AmpersoundRecorder = () => {
     const [isRecording, setIsRecording] = useState(false);
     const [audioBlob, setAudioBlob] = useState(null);
     const [ampersoundName, setAmpersoundName] = useState('');
+    const [privacy, setPrivacy] = useState('public');
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -116,6 +117,7 @@ const AmpersoundRecorder = () => {
         
         formData.append('audio_file', audioBlob, `${ampersoundName.trim()}${fileExtension}`);
         formData.append('name', ampersoundName.trim());
+        formData.append('privacy', privacy);
 
         try {
             const response = await fetch('/api/v1/ampersounds', {
@@ -159,6 +161,19 @@ const AmpersoundRecorder = () => {
                 />
             </div>
 
+            <div>
+                <label htmlFor="ampersoundPrivacy">Privacy: </label>
+                <select 
+                    id="ampersoundPrivacy" 
+                    value={privacy} 
+                    onChange={(e) => setPrivacy(e.target.value)}
+                    disabled={isRecording || isLoading || !!audioBlob}
+                >
+                    <option value="public">Public</option>
+                    <option value="friends">Friends Only</option>
+                </select>
+            </div>
+
             {!isRecording && !audioBlob && (
                 <button onClick={handleStartRecording} disabled={isLoading}>Start Recording</button>
             )}
@@ -174,7 +189,7 @@ const AmpersoundRecorder = () => {
                         <button onClick={handleSaveAmpersound} disabled={isLoading || !ampersoundName.trim()}>
                             {isLoading ? 'Saving...' : 'Save Ampersound'}
                         </button>
-                        <button onClick={() => { setAudioBlob(null); setAmpersoundName(''); setError(null); setSuccessMessage(null);}} disabled={isLoading} className="discard-button">
+                        <button onClick={() => { setAudioBlob(null); setAmpersoundName(''); setPrivacy('public'); setError(null); setSuccessMessage(null);}} disabled={isLoading} className="discard-button">
                             Record New / Discard
                         </button>
                     </div>

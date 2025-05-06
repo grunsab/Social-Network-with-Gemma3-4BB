@@ -335,15 +335,24 @@ function Profile() {
                     {myAmpersounds.map(sound => (
                         <li key={sound.id} className="ampersound-list-item">
                             <div className="ampersound-item-info">
-                                <span className="ampersound-name">&{sound.name}</span>
+                                <div className="ampersound-info">
+                                    <span className="ampersound-name">&{sound.name}</span>
+                                    <span className="ampersound-timestamp">
+                                        ({new Date(sound.timestamp).toLocaleDateString()})
+                                    </span>
+                                    {/* Display privacy status */}
+                                    <span className={`ampersound-privacy-status ${sound.privacy === 'friends' ? 'privacy-friends' : 'privacy-public'}`}>
+                                        ({sound.privacy})
+                                    </span>
+                                </div>
                                 <span className="ampersound-play-count">({sound.play_count ?? 0} plays)</span>
                             </div>
                             <div className="ampersound-item-actions">
                                 {/* Play/Pause Button */} 
                                 <button 
-                                    onClick={() => handlePlayToggle(sound)} // Use the new handler
+                                    onClick={() => handlePlayToggle(sound)}
                                     className={`ampersound-play-button icon-button ${currentlyPlaying?.id === sound.id ? 'playing' : ''}`}
-                                    disabled={loadingSound === sound.id}
+                                    disabled={loadingSound === sound.id || deleteInProgress === sound.id}
                                     title={currentlyPlaying?.id === sound.id ? `Pause &${sound.name}` : `Play &${sound.name}`}
                                 >
                                     {loadingSound === sound.id ? (
