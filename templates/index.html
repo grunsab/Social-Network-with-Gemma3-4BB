@@ -52,30 +52,34 @@
                         
                         <p class="card-text">
                             <small class="text-muted"><span class="local-timestamp" data-timestamp="{{ post.timestamp.isoformat() }}"></span></small>
-                            {# Display multiple categories/scores if they exist #}
-                            {% if post.category_scores %}
-                                <span class="float-end">
+                        </p>
+                        
+                        {# Categories Section - moved here #}
+                        {% if post.category_scores %}
+                            <div class="mb-2">
                                 {% for score in post.category_scores|sort(attribute='score', reverse=True) %}
                                     <span class="badge bg-secondary me-1">{{ score.category }} ({{ '%0.2f'|format(score.score) }})</span>
                                 {% endfor %}
-                                </span>
-                            {% endif %}
-                        </p>
+                            </div>
+                        {% endif %}
                         
-                        <div class="d-flex justify-content-between align-items-center mt-2">
-                            <div>
+                        {# Buttons Section #}
+                        <div class="d-flex flex-column align-items-start mt-2">
+                            <div class="mb-2"> {# Wrapper for comments button/link #}
                                 <button class="btn btn-sm btn-outline-primary comments-toggle" data-post-id="{{ post.id }}">
                                     Comments <span class="comment-count">{% if post.comments|length > 0 %}({{ post.comments|length }}){% endif %}</span>
                                 </button>
                                 <a href="{{ url_for('comments', post_id=post.id) }}" class="btn btn-sm btn-link">View All</a>
                             </div>
                             
-                            {# Add Delete Button/Form if the post belongs to the current user #}
+                            {# Delete Button/Form #}
                             {% if post.author == current_user %}
-                                <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
-                                    <input type="hidden" name="_method" value="DELETE">
-                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                </form>
+                                <div> {# Wrapper for delete button #}
+                                    <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
+                                        <input type="hidden" name="_method" value="DELETE">
+                                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                    </form>
+                                </div>
                             {% endif %}
                         </div>
                         
