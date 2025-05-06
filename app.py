@@ -756,7 +756,10 @@ def create_app(config_name='default'):
             results.append({
                 "id": sound.id, # Include ID for potential future use
                 "tag": tag,
-                "owner": sound.user.username,
+                "user": {
+                    "id": sound.user.id,
+                    "username": sound.user.username
+                },
                 "name": sound.name,
                 "url": file_url, # Add the generated URL
                 "privacy": sound.privacy # Include privacy setting
