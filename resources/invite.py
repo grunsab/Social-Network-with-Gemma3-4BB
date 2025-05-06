@@ -1,6 +1,7 @@
 from flask import current_app, url_for
 from flask_restful import Resource, fields, marshal_with, abort
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload
 
 from models import db, User, InviteCode
 
@@ -14,9 +15,8 @@ invite_code_fields = {
     'issuer_id': fields.Integer,
     'used_by_id': fields.Integer,
     'used_by_username': fields.String(attribute='used_by.username', default=None), # Get username via relationship
-    'timestamp': fields.DateTime(dt_format='iso8601'),
-    'registration_url': fields.FormattedString('{scheme}://{host}/register?invite_code={code}') # Construct URL - needs request context
-    # Need a way to pass scheme/host or construct this differently
+    'timestamp': fields.DateTime(dt_format='iso8601')
+    # 'registration_url': fields.FormattedString('{scheme}://{host}/register?invite_code={code}') # Removed - Handled manually in GET
 }
 
 # For the overall response of the manage invites endpoint
@@ -35,11 +35,7 @@ class InviteResource(Resource):
         used_codes = InviteCode.query.filter_by(issuer_id=current_user.id, is_used=True).join(User, InviteCode.used_by_id == User.id).options(joinedload(InviteCode.used_by)).all()
         
         # Manually construct response for now, especially the URL
-        # This might need request context or config for base URL
-        base_url = url_for('index', _external=True).replace('/', '') # Hacky way to get base URL
-        register_base_url = url_for('register', _external=True) # Assuming a route named 'register' exists for URL generation?
-                                                                # This is problematic as we removed the Flask register route.
-                                                                # We need a frontend URL base from config.
+        # Use FRONTEND_URL from config for the registration link base
         frontend_base_url = current_app.config.get('FRONTEND_URL', '') # Need to configure this!
 
         def serialize_code(code):
