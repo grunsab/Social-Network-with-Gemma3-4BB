@@ -5,7 +5,7 @@ import Post from './Post'; // Re-use Post component
 import './Profile.css'; // Import the CSS file
 import Spinner from './Spinner'; // Import Spinner
 import AmpersoundRecorder from './AmpersoundRecorder'; // Import AmpersoundRecorder
-import { FaTrashAlt } from 'react-icons/fa'; // Import Trash icon
+import { FaTrashAlt, FaPlay, FaPause } from 'react-icons/fa'; // Import Trash and Play/Pause icons
 
 function Profile() {
   const { username } = useParams(); // Get username from URL parameter
@@ -20,6 +20,11 @@ function Profile() {
   const [loadingAmpersounds, setLoadingAmpersounds] = useState(false);
   const [errorAmpersounds, setErrorAmpersounds] = useState('');
   const [deleteInProgress, setDeleteInProgress] = useState(null); // Track which sound ID is being deleted
+
+  // State for playback on profile page
+  const [currentlyPlaying, setCurrentlyPlaying] = useState(null); // { id: soundId, audio: audioObject }
+  const [loadingSound, setLoadingSound] = useState(null); // Track which sound is loading
+  const [playbackError, setPlaybackError] = useState(''); // Specific error for playback
 
   // Use useCallback for fetchProfile to prevent re-renders if passed as prop
   const fetchProfile = useCallback(async () => {
@@ -77,6 +82,15 @@ function Profile() {
         fetchMyAmpersounds();
     }
   }, [profileData]); // Rerun when profileData is loaded/changed
+
+  // Cleanup audio on unmount or when playing state changes
+  useEffect(() => {
+    return () => {
+        if (currentlyPlaying?.audio) {
+            currentlyPlaying.audio.pause();
+        }
+    };
+  }, [currentlyPlaying]);
 
   // --- Friendship Action Handlers ---
   const handleFriendAction = async (actionType, endpoint, method, body = null) => {
@@ -178,6 +192,64 @@ function Profile() {
       }
   };
 
+  // Playback handler for profile page list
+  const handlePlayToggle = async (sound) => {
+    setPlaybackError('');
+    setLoadingSound(sound.id);
+
+    if (currentlyPlaying?.id === sound.id) {
+        currentlyPlaying.audio.pause();
+        setCurrentlyPlaying(null);
+        setLoadingSound(null);
+        return;
+    }
+
+    if (currentlyPlaying?.audio) {
+        currentlyPlaying.audio.pause();
+        setCurrentlyPlaying(null);
+    }
+
+    try {
+        // Fetch URL and increment count (backend handles increment)
+        const response = await fetch(`/ampersounds/${sound.user.username}/${sound.name}`, {
+             credentials: 'include'
+        });
+         if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.message || `Could not fetch &${sound.name}`);
+        }
+        const data = await response.json();
+
+        if (data.url) {
+            // Update play count in local state
+            setMyAmpersounds(prevSounds => prevSounds.map(s => 
+                s.id === sound.id ? { ...s, play_count: data.play_count ?? s.play_count } : s
+            ));
+
+            const audio = new Audio(data.url);
+            setCurrentlyPlaying({ id: sound.id, audio: audio });
+            
+            audio.play().catch(playError => {
+                console.error("Error playing audio:", playError);
+                setPlaybackError(`Could not play &${sound.name}: ${playError.message}`);
+                setCurrentlyPlaying(null);
+            });
+
+            audio.onended = () => {
+                setCurrentlyPlaying(null);
+            };
+        } else {
+             throw new Error('Audio URL not found in response.');
+        }
+    } catch (err) {
+        console.error(`Error playing &${sound.name}:`, err);
+        setPlaybackError(`Error playing &${sound.name}: ${err.message}`);
+        setCurrentlyPlaying(null);
+    } finally {
+        setLoadingSound(null);
+    }
+  };
+
   if (loading) return <Spinner contained={true} />; // Use spinner for initial profile load
   // Show profile error and action error separately
   const profileError = !profileData && error;
@@ -254,6 +326,7 @@ function Profile() {
             <h3>My Saved Ampersounds ({myAmpersounds.length})</h3>
             {loadingAmpersounds && <Spinner contained={true} />}
             {errorAmpersounds && <p className="error-message">{errorAmpersounds}</p>}
+            {playbackError && <p className="error-message">Playback Error: {playbackError}</p>} 
             {!loadingAmpersounds && !errorAmpersounds && myAmpersounds.length === 0 && (
                 <p>You haven't created any Ampersounds yet.</p>
             )}
@@ -263,17 +336,34 @@ function Profile() {
                         <li key={sound.id} className="ampersound-list-item">
                             <div className="ampersound-item-info">
                                 <span className="ampersound-name">&{sound.name}</span>
-                                {sound.url && <audio controls src={sound.url} className="ampersound-audio-player"></audio>}
                                 <span className="ampersound-play-count">({sound.play_count ?? 0} plays)</span>
                             </div>
-                            <button 
-                                className="ampersound-delete-button icon-button"
-                                onClick={() => handleDeleteAmpersound(sound.id, sound.name)}
-                                disabled={deleteInProgress === sound.id} // Disable button during its deletion
-                                title={`Delete &${sound.name}`}
-                            >
-                                {deleteInProgress === sound.id ? <Spinner inline={true} size="small" /> : <FaTrashAlt />}
-                            </button>
+                            <div className="ampersound-item-actions">
+                                {/* Play/Pause Button */} 
+                                <button 
+                                    onClick={() => handlePlayToggle(sound)} // Use the new handler
+                                    className={`ampersound-play-button icon-button ${currentlyPlaying?.id === sound.id ? 'playing' : ''}`}
+                                    disabled={loadingSound === sound.id}
+                                    title={currentlyPlaying?.id === sound.id ? `Pause &${sound.name}` : `Play &${sound.name}`}
+                                >
+                                    {loadingSound === sound.id ? (
+                                        <Spinner inline={true} size="small" />
+                                    ) : currentlyPlaying?.id === sound.id ? (
+                                        <FaPause /> 
+                                    ) : (
+                                        <FaPlay />
+                                    )}
+                                </button>
+                                {/* Delete Button */}
+                                <button 
+                                    className="ampersound-delete-button icon-button"
+                                    onClick={() => handleDeleteAmpersound(sound.id, sound.name)}
+                                    disabled={deleteInProgress === sound.id}
+                                    title={`Delete &${sound.name}`}
+                                >
+                                    {deleteInProgress === sound.id ? <Spinner inline={true} size="small" /> : <FaTrashAlt />}
+                                </button>
+                            </div>
                         </li>
                     ))}
                 </ul>
