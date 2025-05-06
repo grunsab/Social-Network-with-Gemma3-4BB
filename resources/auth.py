@@ -21,7 +21,7 @@ class UserRegistration(Resource):
         if User.query.filter_by(email=email).first():
             return {'message': 'Email already exists'}, 409 # Conflict
 
-        hashed_password = generate_password_hash(password)
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
         new_user = User(username=username, email=email, password_hash=hashed_password)
 
         # Set profile picture path based on environment (local vs S3/R2)

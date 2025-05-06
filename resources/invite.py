@@ -27,9 +27,12 @@ manage_invites_response_fields = {
 }
 
 class InviteResource(Resource):
-    @login_required
+    # @login_required # Remove decorator
     # Removed marshal_with for GET temporarily due to URL generation complexity
     def get(self):
+        # <<< Manual authentication check >>>
+        if not current_user.is_authenticated:
+            return login_manager.unauthorized()
         # Logic from manage_invites GET
         unused_codes = InviteCode.query.filter_by(issuer_id=current_user.id, is_used=False).all()
         used_codes = InviteCode.query.filter_by(issuer_id=current_user.id, is_used=True).join(User, InviteCode.used_by_id == User.id).options(joinedload(InviteCode.used_by)).all()
@@ -57,9 +60,13 @@ class InviteResource(Resource):
             'invites_left': current_user.invites_left
         }
 
-    @login_required
+    # @login_required # Remove decorator
     @marshal_with(invite_code_fields) # Can marshal the newly created code
     def post(self):
+        # <<< Manual authentication check >>>
+        if not current_user.is_authenticated:
+            return login_manager.unauthorized()
+            
         # Logic from manage_invites POST (Generate new code)
         if current_user.invites_left <= 0:
             abort(400, message="You have no invites left.")

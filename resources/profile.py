@@ -120,3 +120,44 @@ class ProfileResource(Resource):
             'friendship_status': status,
             'pending_request_id': pending_request_id if status in ['PENDING_SENT', 'PENDING_RECEIVED'] else None # Return ID only if relevant
         } 
+
+# <<< New Resource for /me endpoint >>>
+class MyProfileResource(Resource):
+    @marshal_with(profile_data_fields)
+    def get(self):
+        if not current_user or not current_user.is_authenticated:
+             abort(401, message="Authentication required.")
+
+        user = current_user # Get the currently logged-in user
+
+        # We know the status is 'SELF'
+        status = 'SELF'
+        pending_request_id = None 
+
+        # Fetch all posts for the user
+        posts_query = Post.query.filter_by(user_id=user.id)
+        
+        # Load author and scores
+        posts = posts_query.options(
+            joinedload(Post.author), 
+            joinedload(Post.category_scores)
+        ).order_by(Post.timestamp.desc()).all()
+        
+        # Filter posts by blocked categories (same logic as ProfileResource)
+        blocked_categories = current_app.config.get('BLOCKED_CATEGORIES', set())
+        filtered_posts = []
+        for p in posts:
+             post_categories = {score.category for score in p.category_scores}
+             if not post_categories.intersection(blocked_categories):
+                 filtered_posts.append(p)
+
+        # Fetch interests
+        interests = UserInterest.query.filter_by(user_id=user.id).order_by(UserInterest.score.desc()).all()
+        
+        return {
+            'user': user,
+            'posts': filtered_posts,
+            'interests': interests,
+            'friendship_status': status,
+            'pending_request_id': pending_request_id 
+        } 

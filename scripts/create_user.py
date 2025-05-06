@@ -13,9 +13,10 @@ sys.path.insert(0, project_root)
 # Import necessary components from the Flask app
 from models import User, InviteCode
 from extensions import db # Import the db instance
-from app import app # Import the Flask app instance
+# from app import app # Import the Flask app instance
+from app import create_app # Import the app factory
 
-def create_user_in_context(username, password, invite_code_str=None):
+def create_user_in_context(username, password, email, invite_code_str=None):
     """Creates a user within the Flask app context."""
     invite_code_obj = None
     try:
@@ -38,6 +39,7 @@ def create_user_in_context(username, password, invite_code_str=None):
         # 4. Create the new user
         new_user = User(
             username=username,
+            email=email,
             password_hash=hashed_password,
             used_invite_code=invite_code_str
         )
@@ -65,13 +67,15 @@ def create_user_in_context(username, password, invite_code_str=None):
     # No finally/close needed, Flask context manager handles session lifecycle
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3 or len(sys.argv) > 4:
-        print("Usage: python scripts/create_user.py <username> <password> [invite_code]")
+    # Expect email as the 3rd argument
+    if len(sys.argv) < 4 or len(sys.argv) > 5:
+        print("Usage: python scripts/create_user.py <username> <password> <email> [invite_code]")
         sys.exit(1)
 
     username_arg = sys.argv[1]
     password_arg = sys.argv[2]
-    invite_code_arg = sys.argv[3] if len(sys.argv) == 4 else None
+    email_arg = sys.argv[3] # Get email argument
+    invite_code_arg = sys.argv[4] if len(sys.argv) == 5 else None # Adjust index for optional code
 
     # Load environment variables BEFORE app context is created
     # This ensures app config picks up any .env settings if the file exists
@@ -82,6 +86,11 @@ if __name__ == "__main__":
         print("Loading .env file...")
         load_dotenv(dotenv_path=dotenv_path)
 
+    # Create an app instance using the factory
+    # Use default config (usually development) which should be fine for a script
+    app = create_app() 
+
     # Run the user creation logic within the Flask application context
     with app.app_context():
-        create_user_in_context(username_arg, password_arg, invite_code_arg) 
+        # Pass email to the function
+        create_user_in_context(username_arg, password_arg, email_arg, invite_code_arg) 

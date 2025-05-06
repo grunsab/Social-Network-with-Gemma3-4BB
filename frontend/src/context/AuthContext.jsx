@@ -6,31 +6,38 @@ const AuthContext = createContext(null);
 // Create a provider component
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true); // Track initial loading state
+  const [loading, setLoading] = useState(true); // Start loading true
 
-  // TODO: Check for existing session/token on initial load (e.g., from localStorage or httpOnly cookie check)
+  // Check for existing session on initial load
   useEffect(() => {
-    // Example: Placeholder for checking session
-    // const checkSession = async () => {
-    //   try {
-    //     const response = await fetch('/api/v1/session/check'); // Hypothetical endpoint
-    //     if (response.ok) {
-    //       const user = await response.json();
-    //       setCurrentUser(user);
-    //     } else {
-    //       setCurrentUser(null);
-    //     }
-    //   } catch (error) {
-    //     console.error("Session check failed:", error);
-    //     setCurrentUser(null);
-    //   } finally {
-    //     setLoading(false);
-    //   }
-    // };
-    // checkSession();
+    const checkSession = async () => {
+      try {
+        // Use the existing endpoint that requires login and returns user data
+        const response = await fetch('/api/v1/profiles/me', { 
+            method: 'GET', // Explicit GET is good practice
+            credentials: 'include' // *** Add this to send cookies ***
+        }); 
+        if (response.ok) {
+          const data = await response.json();
+          console.log('AuthContext Session Check Response Data:', data); // Log API response
+          // Check if user data is nested under 'user' key, otherwise assume it's top-level
+          const userData = data.user || data;
+          setCurrentUser(userData);
+        } else {
+          // If status is 401 or other error, assume not logged in
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        console.error("Session check failed:", error);
+        setCurrentUser(null);
+      } finally {
+        setLoading(false); // Set loading false after check completes
+      }
+    };
+    checkSession();
     
-    // For now, assume no session on load
-    setLoading(false); 
+    // Remove the previous assumption
+    // setLoading(false); 
   }, []);
 
   // Function to handle login - expects user data from API

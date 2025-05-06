@@ -48,10 +48,14 @@ function Dashboard() {
   }, [currentUser]);
 
   const handlePostCreated = (newPost) => {
-    console.log("New post created, refreshing feed from page 1:", newPost);
-    setCurrentPage(1);
-    setInitialLoad(true);
-    fetchPosts(1, false);
+    console.log("New post created, prepending to feed:", newPost);
+    // Prepend the new post to the existing posts list
+    setPosts(prevPosts => [newPost, ...prevPosts]);
+    // No need to trigger a full refresh or set loading/initialLoad here
+    // The feed will naturally update on next full load or page change if needed.
+    // setCurrentPage(1);
+    // setInitialLoad(true);
+    // fetchPosts(1, false);
   };
 
   const handlePostDeleted = (deletedPostId) => {
