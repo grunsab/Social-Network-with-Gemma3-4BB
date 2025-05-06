@@ -143,6 +143,8 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
       {/* Post Content - Updated to use PlayableContentViewer */}
       {post.content && 
         <div className="post-content">
+            { /* Log the content being passed to PlayableContentViewer */ }
+            { console.log("Post.jsx - Rendering post.content for PlayableContentViewer:", post.content) }
             <PlayableContentViewer htmlContent={post.content} />
         </div>
       } 

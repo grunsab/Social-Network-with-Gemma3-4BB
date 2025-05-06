@@ -1,5 +1,5 @@
 from flask import request, jsonify, current_app
-from flask_restful import Resource, reqparse, fields, marshal_with
+from flask_restful import Resource, reqparse, fields, marshal_with, marshal
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage # Import FileStorage for reqparse
@@ -180,19 +180,17 @@ class PostListResource(Resource):
 
             db.session.commit()
 
-            # Return created post data (or just success)
-            # Need a way to serialize the post object properly
+            # Ensure author relationship is loaded for the formatter/marshaller
+            # If not already loaded, this might be needed, or ensure it via options earlier.
+            # For now, assume new_post.author is accessible.
+            
+            # Use marshal to format the new_post object with post_fields
+            # This will apply the FormattedContent field for ampersounds.
+            formatted_post_data = marshal(new_post, post_fields)
+
             return {
                 'message': 'Post created successfully',
-                'post': {
-                    'id': new_post.id,
-                    'content': new_post.content,
-                    'image_url': new_post.image_url,
-                    'privacy': new_post.privacy.name,
-                    'timestamp': new_post.timestamp.isoformat(),
-                    'author_username': new_post.author.username, # Assumes relationship loaded
-                    'classification_scores': new_post.classification_scores
-                }
+                'post': formatted_post_data
              }, 201
 
         except Exception as e:
