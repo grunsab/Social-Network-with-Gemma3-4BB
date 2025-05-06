@@ -371,17 +371,16 @@ def create_app(config_name='default'):
         # Ensure os is available (it's imported at the top of app.py)
         # Ensure send_from_directory is available (imported from flask at the top)
         
-        static_folder = os.path.join(os.path.dirname(__file__), 'frontend', 'build')
-
-        if path and os.path.exists(os.path.join(static_folder, path)):
+        # Use app.static_folder which is defined as 'frontend/dist' when Flask app is created
+        if path and os.path.exists(os.path.join(app.static_folder, path)):
             # If the path exists as a file in the static folder, serve it directly
-            return send_from_directory(static_folder, path)
+            return send_from_directory(app.static_folder, path)
         else:
             # Otherwise, serve the index.html (for client-side routing)
             # This handles cases like /profile, /settings, etc., which are React routes
-            index_path = os.path.join(static_folder, 'index.html')
+            index_path = os.path.join(app.static_folder, 'index.html')
             if os.path.exists(index_path):
-                return send_from_directory(static_folder, 'index.html')
+                return send_from_directory(app.static_folder, 'index.html')
             else:
                 # Fallback if index.html is somehow missing
                 return jsonify({"error": "React app not found. Build the frontend first."}), 404
