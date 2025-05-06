@@ -738,30 +738,46 @@ def personalized_feed():
     user_interests = UserInterest.query.filter_by(user_id=current_user.id).order_by(UserInterest.score.desc()).limit(5).all()
     interested_categories = [interest.category for interest in user_interests]
 
+    posts = [] # Initialize posts list
+
     if not interested_categories:
         # If no interests, show recent posts (excluding user's own), ordered by timestamp
         # But respect privacy settings
-        public_posts = Post.query.filter(
-            Post.user_id != current_user.id, 
+        public_posts_query = Post.query.options(
+            joinedload(Post.author),
+            joinedload(Post.category_scores) # Load scores for blocking filter
+        ).filter(
+            Post.user_id != current_user.id,
             Post.privacy == PostPrivacy.PUBLIC
-        ).order_by(Post.timestamp.desc())
-        
-        friends_posts = db.session.query(Post).join(
-            FriendRequest, 
+        )
+
+        friends_posts_query = Post.query.options(
+            joinedload(Post.author),
+            joinedload(Post.category_scores) # Load scores for blocking filter
+        ).join(
+            FriendRequest,
             (
-                ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) | 
+                ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) |
                 ((FriendRequest.receiver_id == current_user.id) & (FriendRequest.sender_id == Post.user_id))
             )
         ).filter(
             FriendRequest.status == FriendRequestStatus.ACCEPTED,
             Post.privacy == PostPrivacy.FRIENDS,
             Post.user_id != current_user.id
-        ).order_by(Post.timestamp.desc())
-        
-        posts = public_posts.union_all(friends_posts).order_by(Post.timestamp.desc()).limit(50).all()
+        )
+
+        # Combine the querysets and order by timestamp
+        # Note: direct union might lose individual ordering options; fetch separately and combine/sort in Python
+        public_posts = public_posts_query.order_by(Post.timestamp.desc()).limit(25).all() # Limit individually
+        friends_posts = friends_posts_query.order_by(Post.timestamp.desc()).limit(25).all() # Limit individually
+
+        # Combine, remove duplicates (by id), and sort by timestamp
+        all_recent_posts = {p.id: p for p in public_posts + friends_posts}.values()
+        posts = sorted(list(all_recent_posts), key=lambda p: p.timestamp, reverse=True)[:50] # Apply final limit
+
         flash("Explore posts to build your personalized feed!", "info")
     else:
-        # Create subquery of user interests with categories and scores
+        # --- Step 1: Query for relevant post IDs and scores ---
         user_interest_subq = db.session.query(
             UserInterest.category,
             UserInterest.score
@@ -769,77 +785,89 @@ def personalized_feed():
             UserInterest.user_id == current_user.id,
             UserInterest.category.in_(interested_categories)
         ).subquery()
-        
-        # Base query for public posts - now with calculated relevance
+
+        # Base query for public posts - IDs, relevance, timestamp
         public_base_query = db.session.query(
-            Post,
+            Post.id.label('post_id'),
             func.sum(
                 PostCategoryScore.score * user_interest_subq.c.score
-            ).label('relevance_score')
+            ).label('relevance_score'),
+            Post.timestamp
         ).join(
-            PostCategoryScore,
-            Post.id == PostCategoryScore.post_id
+            PostCategoryScore, Post.id == PostCategoryScore.post_id
         ).join(
-            user_interest_subq,
-            PostCategoryScore.category == user_interest_subq.c.category
+            user_interest_subq, PostCategoryScore.category == user_interest_subq.c.category
         ).filter(
-            Post.user_id != current_user.id,
-            Post.privacy == PostPrivacy.PUBLIC
-        ).group_by(Post.id)
-        
-        # Base query for friends' posts - with relevance calculation
+            Post.user_id != current_user.id, Post.privacy == PostPrivacy.PUBLIC
+        ).group_by(Post.id, Post.timestamp)
+
+        # Base query for friends' posts - IDs, relevance, timestamp
         friends_base_query = db.session.query(
-            Post,
+            Post.id.label('post_id'),
             func.sum(
                 PostCategoryScore.score * user_interest_subq.c.score
-            ).label('relevance_score')
+            ).label('relevance_score'),
+            Post.timestamp
         ).join(
-            FriendRequest, 
+            FriendRequest,
             (
-                ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) | 
+                ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) |
                 ((FriendRequest.receiver_id == current_user.id) & (FriendRequest.sender_id == Post.user_id))
             )
         ).join(
-            PostCategoryScore,
-            Post.id == PostCategoryScore.post_id
+            PostCategoryScore, Post.id == PostCategoryScore.post_id
         ).join(
-            user_interest_subq,
-            PostCategoryScore.category == user_interest_subq.c.category
+            user_interest_subq, PostCategoryScore.category == user_interest_subq.c.category
         ).filter(
             FriendRequest.status == FriendRequestStatus.ACCEPTED,
             Post.privacy == PostPrivacy.FRIENDS,
             Post.user_id != current_user.id
-        ).group_by(Post.id)
-        
-        # Union queries preserving relevance_score using full select statements
-        # (we can't use simple union_all here because we need to preserve relevance_score)
+        ).group_by(Post.id, Post.timestamp)
+
         combined_query = public_base_query.union_all(friends_base_query)
-        
-        # Order by relevance score (descending) then by timestamp
-        posts_with_scores = combined_query.order_by(
+
+        # Subquery to order and limit the combined results
+        ordered_subquery = combined_query.order_by(
             desc('relevance_score'),
-            Post.timestamp.desc()
-        ).limit(50).all()
-        
-        # Extract just the Post objects from the result tuples
-        posts = [post_tuple[0] for post_tuple in posts_with_scores]
-        
-        # If we don't have enough posts, add some recent ones
+            desc('timestamp') # Use the alias from the inner query
+        ).limit(50).subquery()
+
+        # Get the ordered list of post IDs
+        ordered_post_ids = [item.post_id for item in db.session.query(ordered_subquery.c.post_id).all()]
+
+        # --- Step 2: Fetch full Post objects for the selected IDs ---
+        if ordered_post_ids:
+            # Fetch posts using the ordered IDs, loading necessary relationships
+            posts_map = {
+                p.id: p for p in Post.query
+                    .options(
+                        joinedload(Post.author),
+                        joinedload(Post.category_scores) # Needed for blocking filter
+                        # joinedload(Post.comments) # Load comments if displayed on feed
+                    )
+                    .filter(Post.id.in_(ordered_post_ids))
+                    .all()
+            }
+            # Reconstruct the list in the correct order determined by the relevance query
+            posts = [posts_map[pid] for pid in ordered_post_ids if pid in posts_map]
+
+        # --- Step 3: Augment with recent posts if needed ---
         if len(posts) < 10:
             existing_post_ids = [p.id for p in posts]
-            
-            # Get recent public posts
-            recent_public_posts = Post.query.filter(
+            limit_recent = 10 - len(posts)
+
+            # Query for recent public post IDs not already included
+            recent_public_ids_query = db.session.query(Post.id).filter(
                 Post.user_id != current_user.id,
                 Post.privacy == PostPrivacy.PUBLIC,
                 ~Post.id.in_(existing_post_ids)
-            ).order_by(Post.timestamp.desc()).limit(5).all()
-            
-            # Get recent friends' posts
-            recent_friends_posts = db.session.query(Post).join(
-                FriendRequest, 
+            ).order_by(Post.timestamp.desc()).limit(limit_recent)
+
+            # Query for recent friends' post IDs not already included
+            recent_friends_ids_query = db.session.query(Post.id).join(
+                FriendRequest,
                 (
-                    ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) | 
+                    ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) |
                     ((FriendRequest.receiver_id == current_user.id) & (FriendRequest.sender_id == Post.user_id))
                 )
             ).filter(
@@ -847,19 +875,47 @@ def personalized_feed():
                 Post.privacy == PostPrivacy.FRIENDS,
                 Post.user_id != current_user.id,
                 ~Post.id.in_(existing_post_ids)
-            ).order_by(Post.timestamp.desc()).limit(5).all()
+            ).order_by(Post.timestamp.desc()).limit(limit_recent)
             
-            posts.extend(recent_public_posts)
-            posts.extend(recent_friends_posts)
+            # Combine IDs from recent queries, ensuring uniqueness and limiting
+            recent_public_ids = [item[0] for item in recent_public_ids_query.all()]
+            recent_friends_ids = [item[0] for item in recent_friends_ids_query.all()]
+            # Simple merge, prioritizing public, maintaining approximate time order, removing duplicates
+            additional_ids = list(dict.fromkeys(recent_public_ids + recent_friends_ids))[:limit_recent]
 
-    # Filter out posts with blocked categories
+
+            if additional_ids:
+                # Fetch full Post objects for these additional IDs
+                additional_posts_map = {
+                    p.id: p for p in Post.query
+                        .options(
+                            joinedload(Post.author),
+                            joinedload(Post.category_scores)
+                        )
+                        .filter(Post.id.in_(additional_ids))
+                        .all()
+                }
+                # Append fetched posts in the determined order
+                posts.extend([additional_posts_map[pid] for pid in additional_ids if pid in additional_posts_map])
+
+
+    # --- Step 4: Filter out posts with blocked categories ---
     filtered_posts = []
-    for post in posts:
-        post_categories = {score.category for score in post.category_scores}
+    posts_to_filter = posts if posts else [] # Ensure posts is iterable
+    processed_ids = set() # Keep track of processed post IDs to avoid duplicates if any slipped through
+
+    for post in posts_to_filter:
+        if post.id in processed_ids:
+            continue # Skip duplicates
+
+        # Ensure category_scores relationship was loaded for filtering
+        post_categories = {score.category for score in post.category_scores} if post.category_scores else set()
         if not post_categories.intersection(BLOCKED_CATEGORIES):
             filtered_posts.append(post)
+            processed_ids.add(post.id)
 
-    # Add pagination later if needed
+
+    # Render the template with the correctly loaded and filtered posts
     return render_template('feed.html', posts=filtered_posts, interests=interested_categories, PostPrivacy=PostPrivacy)
 
 # --- Comment Routes ---
