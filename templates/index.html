@@ -58,7 +58,10 @@
                         {% if post.category_scores %}
                             <div class="mb-2">
                                 {% for score in post.category_scores|sort(attribute='score', reverse=True) %}
-                                    <span class="badge bg-secondary me-1">{{ score.category }} ({{ '%0.2f'|format(score.score) }})</span>
+                                    {% set category_url = url_for('category_posts', category_name=score.category) %}
+                                    <a href="{{ category_url }}" class="text-decoration-none">
+                                        <span class="badge bg-secondary me-1">{{ score.category }} ({{ '%0.2f'|format(score.score) }})</span>
+                                    </a>
                                 {% endfor %}
                             </div>
                         {% endif %}

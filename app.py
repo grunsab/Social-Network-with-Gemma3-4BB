@@ -247,11 +247,11 @@ def index():
     # Filter out posts with blocked categories
     filtered_posts = []
     for post in all_posts_unfiltered:
-        post_categories = {score.category for score in post.category_scores}
+        post_categories = {score.category for score in post.category_scores if score.score >= 0.5} # Consider categories with score >= 0.5
         if not post_categories.intersection(BLOCKED_CATEGORIES):
             filtered_posts.append(post)
     
-    return render_template('index.html', posts=filtered_posts)
+    return render_template('index.html', posts=filtered_posts, domain_name_images=DOMAIN_NAME_IMAGES)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1002,6 +1002,64 @@ def delete_comment(comment_id):
     else:
         # For regular form submissions
         return redirect(url_for('index'))
+
+@app.route('/category/<string:category_name>')
+@login_required
+def category_posts(category_name):
+    """Display posts belonging to a specific category."""
+    # Basic validation for category name
+    categories_path = os.path.join(os.path.dirname(__file__), 'categories.json')
+    try:
+        with open(categories_path, 'r') as f:
+            all_categories = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_categories = gemma_classification.categories # Fallback
+
+    if category_name not in all_categories or category_name in BLOCKED_CATEGORIES:
+        flash(f"Invalid or blocked category: {category_name}", 'warning')
+        return redirect(url_for('index'))
+
+    # Find posts with the specified category having a score >= 0.5
+    relevant_post_scores = PostCategoryScore.query.filter(
+        PostCategoryScore.category == category_name,
+        PostCategoryScore.score >= 0.5
+    ).subquery()
+
+    # Base query for public posts in this category
+    public_posts_query = Post.query.join(
+        relevant_post_scores, Post.id == relevant_post_scores.c.post_id
+    ).filter(Post.privacy == PostPrivacy.PUBLIC)
+
+    # Query for friends-only posts from friends in this category
+    friends_only_posts_query = Post.query.join(
+        relevant_post_scores, Post.id == relevant_post_scores.c.post_id
+    ).join(
+        FriendRequest,
+        (
+            ((FriendRequest.sender_id == current_user.id) & (FriendRequest.receiver_id == Post.user_id)) |
+            ((FriendRequest.receiver_id == current_user.id) & (FriendRequest.sender_id == Post.user_id))
+        )
+    ).filter(
+        FriendRequest.status == FriendRequestStatus.ACCEPTED,
+        Post.privacy == PostPrivacy.FRIENDS
+    )
+
+    # Query for user's own posts in this category
+    own_posts_query = Post.query.join(
+        relevant_post_scores, Post.id == relevant_post_scores.c.post_id
+    ).filter(Post.user_id == current_user.id)
+
+    # Union all queries and order by timestamp
+    posts_query = public_posts_query.union_all(friends_only_posts_query, own_posts_query)
+    category_specific_posts = posts_query.order_by(Post.timestamp.desc()).all()
+
+    # Note: We don't need to re-filter for BLOCKED_CATEGORIES here because we explicitly checked
+    # if category_name itself is blocked at the start.
+
+    return render_template('category_posts.html',
+                           posts=category_specific_posts,
+                           category_name=category_name,
+                           domain_name_images=DOMAIN_NAME_IMAGES)
 
 if __name__ == '__main__':
     app.run(debug=DEBUG)
