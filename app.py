@@ -678,7 +678,6 @@ def create_app(config_name='default'):
             return jsonify({"message": "Failed to delete Ampersound"}), 500
 
     @app.route('/api/v1/ampersounds/search', methods=['GET'])
-    @login_required 
     def search_ampersounds():
         query_term = request.args.get('q', '').strip()
         limit = request.args.get('limit', 10, type=int)
