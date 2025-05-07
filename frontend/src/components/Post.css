@@ -16,7 +16,18 @@
     font-weight: 600;
     text-decoration: none;
     color: inherit; /* Inherit color from card */
+    display: flex;
+    align-items: center;
 }
+
+.post-author-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 8px;
+}
+
 .post-author-link:hover {
     text-decoration: underline;
 }
@@ -244,6 +255,23 @@
     flex-basis: 100%; /* Ensure it takes full width below input/button */
 }
 
+.post-author-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 5px;
+}
+
+.comment-author-img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
 @media (max-width: 600px) { /* Adjust breakpoint as needed */
   .post-header {
     flex-wrap: wrap;
@@ -283,4 +311,4 @@
     align-self: auto; /* Reset from desktop view if it was flex-end */
     width: 100%; /* Make button full width for easier tapping */
   }
-} 
+}

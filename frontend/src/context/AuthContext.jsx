@@ -63,11 +63,35 @@ export const AuthProvider = ({ children }) => {
     // TODO: Clear any stored token/session info
   };
 
+  // Function to refresh user profile data
+  const refreshUserProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/v1/profiles/me', { 
+          method: 'GET',
+          credentials: 'include'
+      }); 
+      if (response.ok) {
+        const data = await response.json();
+        const userData = data.user || data;
+        setCurrentUser(userData);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Profile refresh failed:", error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value = {
     currentUser,
     loading, // Expose loading state for initial check
     login,
     logout,
+    refreshUserProfile, // Expose the refresh function
   };
 
   return (
@@ -80,4 +104,4 @@ export const AuthProvider = ({ children }) => {
 // Custom hook to use the auth context
 export const useAuth = () => {
   return useContext(AuthContext);
-}; 
+};

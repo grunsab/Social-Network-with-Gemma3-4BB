@@ -1,0 +1,30 @@
+/* Profile Picture Styles for Posts and Comments */
+
+/* Post author profile picture */
+.post-author-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Comment author profile picture */
+.comment-author-img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 5px;
+    vertical-align: middle;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode borders */
+@media (prefers-color-scheme: dark) {
+    .post-author-img,
+    .comment-author-img {
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+}

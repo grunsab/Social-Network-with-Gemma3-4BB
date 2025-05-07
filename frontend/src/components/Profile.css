@@ -19,6 +19,7 @@
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--border-color-dark); /* Optional border */
+    background-color: #f0f0f0; /* Light background for empty/loading state */
 }
 
 @media (prefers-color-scheme: light) {
@@ -297,4 +298,57 @@
     .profile-username {
         font-size: 1.3em; /* Further reduce font size */
     }
-} 
+}
+
+/* Profile Picture Upload Styles */
+.profile-picture-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-picture {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-color-dark);
+    background-color: #f0f0f0; /* Light background for empty/loading state */
+}
+
+.upload-picture-btn {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.upload-picture-btn:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.upload-picture-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.profile-picture-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+}
+
+.profile-picture-actions .error-message {
+    font-size: 0.7rem;
+    text-align: center;
+    margin: 0;
+    color: var(--error-color);
+}

@@ -3,13 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Post from './Post'; // Re-use Post component
 import './Profile.css'; // Import the CSS file
+import './ProfilePicture.css'; // Import the profile picture CSS
 import Spinner from './Spinner'; // Import Spinner
 import AmpersoundRecorder from './AmpersoundRecorder'; // Import AmpersoundRecorder
-import { FaTrashAlt, FaPlay, FaPause } from 'react-icons/fa'; // Import Trash and Play/Pause icons
+import { FaTrashAlt, FaPlay, FaPause, FaCamera } from 'react-icons/fa'; // Import icons
 
 function Profile() {
   const { username } = useParams(); // Get username from URL parameter
-  const { currentUser } = useAuth();
+  const { currentUser, refreshUserProfile } = useAuth();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,6 +26,11 @@ function Profile() {
   const [currentlyPlaying, setCurrentlyPlaying] = useState(null); // { id: soundId, audio: audioObject }
   const [loadingSound, setLoadingSound] = useState(null); // Track which sound is loading
   const [playbackError, setPlaybackError] = useState(''); // Specific error for playback
+
+  // State and handlers for profile picture upload
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = React.useRef(null);
 
   // Use useCallback for fetchProfile to prevent re-renders if passed as prop
   const fetchProfile = useCallback(async () => {
@@ -250,6 +256,70 @@ function Profile() {
     }
   };
 
+  // Handle file input change for profile picture
+  const handleProfilePictureChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.match('image.*')) {
+      setUploadError('Please select an image file (JPEG, PNG, etc.)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadError(`File size should be less than 5MB. Current size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/v1/profiles/upload_picture', {
+        method: 'POST',
+        credentials: 'include', // Include session cookie
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to upload profile picture');
+      }
+
+      const data = await response.json();
+      
+      // Update profile data with new profile picture URL
+      setProfileData(prevData => ({
+        ...prevData,
+        user: {
+          ...prevData.user,
+          profile_picture: data.profile_picture
+        }
+      }));
+
+      // Refresh currentUser in AuthContext to update everywhere in the app
+      await refreshUserProfile();
+
+      console.log('Profile picture updated successfully');
+    } catch (err) {
+      console.error('Error uploading profile picture:', err);
+      setUploadError(err.message || 'Failed to upload profile picture');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Trigger file input click
+  const handleUploadButtonClick = () => {
+    fileInputRef.current.click();
+  };
+
   if (loading) return <Spinner contained={true} />; // Use spinner for initial profile load
   // Show profile error and action error separately
   const profileError = !profileData && error;
@@ -289,13 +359,34 @@ function Profile() {
     <div className="profile-container"> 
       {/* Profile Header section */}
       <div className="profile-header">
-        {user.profile_picture && 
+        <div className="profile-picture-container">
           <img 
-            src={user.profile_picture} 
+            src={user.profile_picture || '/default-profile.png'} 
             alt={`${user.username}'s profile`} 
-            className="profile-picture" // Apply class
+            className="profile-picture"
           />
-        }
+          {friendship_status === 'SELF' && (
+            <div className="profile-picture-actions">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleProfilePictureChange}
+                accept="image/*"
+                className="file-input"
+                style={{ display: 'none' }}
+              />
+              <button 
+                onClick={handleUploadButtonClick} 
+                disabled={uploading}
+                className="upload-picture-btn"
+                title="Upload new profile picture"
+              >
+                {uploading ? <Spinner inline={true} size="small" /> : <><FaCamera /> {user.profile_picture ? 'Change' : 'Add'} Photo</>}
+              </button>
+              {uploadError && <p className="error-message">{uploadError}</p>}
+            </div>
+          )}
+        </div>
         <div className="profile-info"> {/* Wrapper for text info */}
             <h2 className="profile-username">{user.username}</h2>
             <div className="profile-details"> {/* Wrapper for details */}
@@ -313,6 +404,33 @@ function Profile() {
             </div>
         </div>
       </div>
+
+      {/* Profile picture upload section (newly added) */}
+      {friendship_status === 'SELF' && (
+        <div className="profile-section profile-picture-upload">
+          <h3>Profile Picture</h3>
+          <div className="profile-picture-current">
+            {user.profile_picture ? (
+              <img src={user.profile_picture} alt="Current profile" className="current-profile-picture" />
+            ) : (
+              <div className="no-profile-picture">No profile picture set</div>
+            )}
+          </div>
+          <div className="profile-picture-actions">
+            <button onClick={handleUploadButtonClick} className="upload-button">
+              {uploading ? <Spinner inline={true} size="small" /> : 'Upload New Picture'}
+            </button>
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleProfilePictureChange} 
+              style={{ display: 'none' }} 
+              ref={fileInputRef}
+            />
+          </div>
+          {uploadError && <p className="error-message">{uploadError}</p>}
+        </div>
+      )}
 
       {/* Ampersound Recorder and List for own profile */} 
       {friendship_status === 'SELF' && (
@@ -413,4 +531,4 @@ function Profile() {
   );
 }
 
-export default Profile; 
+export default Profile;

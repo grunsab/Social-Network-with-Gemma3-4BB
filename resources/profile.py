@@ -50,6 +50,7 @@ profile_data_fields = {
 # <<< Define parser for PATCH request >>>
 profile_patch_parser = reqparse.RequestParser()
 profile_patch_parser.add_argument('invites_left', type=int, location='json', help='Number of invites left (optional)')
+profile_patch_parser.add_argument('profile_picture', type=str, location='json', help='URL of profile picture (optional)')
 # Add other editable fields here later if needed (e.g., email, profile_picture)
 
 class ProfileResource(Resource):
@@ -186,6 +187,12 @@ class MyProfileResource(Resource):
             user_updated = True
             print(f"INFO: Resetting invites for {current_user.username} to {args['invites_left']}")
 
+        # Update profile_picture if provided
+        if args['profile_picture'] is not None:
+            current_user.profile_picture = args['profile_picture']
+            user_updated = True
+            print(f"INFO: Updating profile picture for {current_user.username}")
+
         # Add logic for other editable fields here from parser...
         # if args['email']:
         #   current_user.email = args['email']
@@ -223,4 +230,4 @@ class MyProfileResource(Resource):
             'interests': interests,
             'friendship_status': 'SELF',
             'pending_request_id': None
-        } 
+        }

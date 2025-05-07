@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext'; // To check if current user is author for delete button
 import { Link } from 'react-router-dom'; // Import Link
 import './Post.css'; // Import the CSS file
+import './ProfileImages.css'; // Import profile image styles
 import Spinner from './Spinner'; // Import Spinner
 import { FaTrashAlt, FaRegCommentDots, FaPlay } from 'react-icons/fa'; // Import Trash, Comment icons, and Play icon
 import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
@@ -336,6 +337,11 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
               // Apply comment class
               <div key={comment.id} className="comment"> 
                  <Link to={`/profile/${comment.author?.username}`} className="comment-author-link">
+                    <img 
+                        src={comment.author?.profile_picture || '/default-profile.png'} 
+                        alt={comment.author?.username || 'User'} 
+                        className="comment-author-img" 
+                    />
                     {comment.author?.username || 'User'}
                  </Link>
                  {/* Comment Content - Updated to use PlayableContentViewer */} 
@@ -428,4 +434,4 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   );
 }
 
-export default Post; 
+export default Post;

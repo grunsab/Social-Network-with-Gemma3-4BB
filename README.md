@@ -10,7 +10,11 @@ The application learns user interests based on the categories of their posts and
 *   View a feed of all posts
 *   View a personalized feed based on learned interests
 *   View user profiles with their posts and inferred interests
-*   post classification
+*   Profile picture upload and management
+*   Post privacy controls (public/friends-only)
+*   Friend request system
+*   Ampersound sound clips sharing
+*   Post classification
 
 ## Setup
 
@@ -40,4 +44,4 @@ The application learns user interests based on the categories of their posts and
 
 ## Database
 
-The application uses SQLite by default (`social_network.db`). The database schema is created automatically when `app.py` is first run. 
+The application uses SQLite by default (`social_network.db`). The database schema is created automatically when `app.py` is first run.

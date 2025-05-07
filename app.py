@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import sys
 import base64
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_login import login_required, current_user
@@ -264,491 +265,559 @@ def create_app(config_name='default'):
     print(f"!!! DEBUG: create_app FUNCTION CALLED    !!!")
     print(f"!!! DEBUG: config_name = {config_name}        !!!")
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
+    
+    try:
+        app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
 
-    # Load configuration from the selected class
-    app.config.from_object(config[config_name])
-    config[config_name].init_app(app) # Call static init_app if defined
+        # Load configuration from the selected class
+        app.config.from_object(config[config_name])
+        config[config_name].init_app(app) # Call static init_app if defined
 
-    print(f"INFO: App created with config: {config_name}")
-    print(f"INFO: Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        print(f"INFO: App created with config: {config_name}")
+        print(f"INFO: Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
-    # Initialize extensions with the app instance
-    db.init_app(app)
-    login_manager.init_app(app)
-    migrate.init_app(app, db)
+        # Initialize extensions with the app instance
+        db.init_app(app)
+        login_manager.init_app(app)
+        migrate.init_app(app, db)
 
-    # Initialize Flask-Restful AFTER app is created
-    api = Api(app)
+        # Initialize Flask-Restful AFTER app is created
+        api = Api(app)
 
-    # Custom unauthorized handler for APIs
-    @login_manager.unauthorized_handler
-    def unauthorized():
-        # Return a JSON response, which is typical for APIs
-        # Flask-RESTful might also handle this, but explicit is good.
-        response = jsonify(message="Authentication required.")
-        response.status_code = 401
-        return response
+        # Custom unauthorized handler for APIs
+        @login_manager.unauthorized_handler
+        def unauthorized():
+            # Return a JSON response, which is typical for APIs
+            # Flask-RESTful might also handle this, but explicit is good.
+            response = jsonify(message="Authentication required.")
+            response.status_code = 401
+            return response
 
-    # Initialize S3 client if config is present
-    s3_client = None
-    if app.config['S3_BUCKET'] and app.config['S3_KEY'] and app.config['S3_SECRET']:
-        s3_client = boto3.client('s3',
-            endpoint_url=app.config['S3_ENDPOINT_URL'],
-            aws_access_key_id=app.config['S3_KEY'],
-            aws_secret_access_key=app.config['S3_SECRET'],
-            region_name=app.config['S3_REGION'],
-        )
-        app.config['S3_CLIENT'] = s3_client
-        print(f"INFO: S3 Client initialized for bucket {app.config['S3_BUCKET']} in region {app.config['S3_REGION']} (Config: {config_name})")
-    else:
-        app.config['S3_CLIENT'] = None
-        print(f"WARN: S3 credentials not found or disabled for config '{config_name}'. Image upload may be limited.")
-
-
-    # Initialize GemmaClassification and store in app.config
-    # It now takes the already populated app.config
-    gemma_classifier = GemmaClassification(app.config)
-    app.config['GEMMA_CLASSIFIER'] = gemma_classifier
-
-
-    # Add API Resources using the 'api' instance initialized above
-    api.add_resource(UserRegistration, '/api/v1/register')
-    api.add_resource(UserLogin, '/api/v1/login')
-    api.add_resource(UserLogout, '/api/v1/logout')
-    api.add_resource(PostListResource, '/api/v1/posts')
-    api.add_resource(PostResource, '/api/v1/posts/<int:post_id>')
-    api.add_resource(CommentListResource, '/api/v1/posts/<int:post_id>/comments')
-    api.add_resource(CommentResource, '/api/v1/comments/<int:comment_id>')
-    api.add_resource(ProfileResource, '/api/v1/profiles/<string:username>')
-    api.add_resource(FriendRequestListResource, '/api/v1/friend-requests')
-    api.add_resource(FriendRequestResource, '/api/v1/friend-requests/<int:request_id>')
-    api.add_resource(FriendshipResource, '/api/v1/friendships/<int:user_id>')
-    api.add_resource(FeedResource, '/api/v1/feed')
-    api.add_resource(CategoryResource, '/api/v1/categories/<string:category_name>/posts')
-    api.add_resource(InviteResource, '/api/v1/invites', '/api/v1/invites/<string:code>')
-    api.add_resource(ReportResource, '/api/v1/reports')
-
-    # --- Manually add routes for MyProfileResource --- 
-    # Instantiate the resource once (though it's stateless here)
-    my_profile_view = MyProfileResource() 
-
-    @app.route('/api/v1/profiles/me', methods=['GET'])
-    @login_required
-    def get_my_profile():
-        # Manually call the resource's get method
-        # Note: marshal_with won't apply automatically, but resource method returns dict.
-        # Return data with default 200 status.
-        response_data = my_profile_view.get()
-        return jsonify(response_data), 200
-
-    @app.route('/api/v1/profiles/me', methods=['PATCH'])
-    @login_required
-    def patch_my_profile():
-        # Manually call the resource's patch method
-        # Note: marshal_with won't apply automatically, resource method returns dict.
-        # Return data with default 200 status.
-        response_data = my_profile_view.patch()
-        return jsonify(response_data), 200
-
-    # --- User Loader for Flask-Login ---
-    @login_manager.user_loader
-    def load_user(user_id):
-        return User.query.get(int(user_id))
-
-    # --- Method Override (can stay as is) ---
-    @app.before_request
-    def method_override():
-        if request.form and '_method' in request.form:
-            method = request.form['_method'].upper()
-            if method in ['PUT', 'DELETE', 'PATCH']:
-                request.environ['REQUEST_METHOD'] = method
-
-    # --- Routes for serving frontend ---
-    @app.route('/')
-    @app.route('/<path:path>')
-    def serve_react_app(path=None): # Optional path parameter
-        # Ensure os is available (it's imported at the top of app.py)
-        # Ensure send_from_directory is available (imported from flask at the top)
-        
-        # Use app.static_folder which is defined as 'frontend/dist' when Flask app is created
-        if path and os.path.exists(os.path.join(app.static_folder, path)):
-            # If the path exists as a file in the static folder, serve it directly
-            return send_from_directory(app.static_folder, path)
+        # Initialize S3 client if config is present
+        s3_client = None
+        if app.config['S3_BUCKET'] and app.config['S3_KEY'] and app.config['S3_SECRET']:
+            s3_client = boto3.client('s3',
+                endpoint_url=app.config['S3_ENDPOINT_URL'],
+                aws_access_key_id=app.config['S3_KEY'],
+                aws_secret_access_key=app.config['S3_SECRET'],
+                region_name=app.config['S3_REGION'],
+            )
+            app.config['S3_CLIENT'] = s3_client
+            print(f"INFO: S3 Client initialized for bucket {app.config['S3_BUCKET']} in region {app.config['S3_REGION']} (Config: {config_name})")
         else:
-            # Otherwise, serve the index.html (for client-side routing)
-            # This handles cases like /profile, /settings, etc., which are React routes
-            index_path = os.path.join(app.static_folder, 'index.html')
-            if os.path.exists(index_path):
+            app.config['S3_CLIENT'] = None
+            print(f"WARN: S3 credentials not found or disabled for config '{config_name}'. Image upload may be limited.")
+
+
+        # Initialize GemmaClassification and store in app.config
+        # It now takes the already populated app.config
+        gemma_classifier = GemmaClassification(app.config)
+        app.config['GEMMA_CLASSIFIER'] = gemma_classifier
+
+
+        # Add API Resources using the 'api' instance initialized above
+        api.add_resource(UserRegistration, '/api/v1/register')
+        api.add_resource(UserLogin, '/api/v1/login')
+        api.add_resource(UserLogout, '/api/v1/logout')
+        api.add_resource(PostListResource, '/api/v1/posts')
+        api.add_resource(PostResource, '/api/v1/posts/<int:post_id>')
+        api.add_resource(CommentListResource, '/api/v1/posts/<int:post_id>/comments')
+        api.add_resource(CommentResource, '/api/v1/comments/<int:comment_id>')
+        api.add_resource(ProfileResource, '/api/v1/profiles/<string:username>')
+        api.add_resource(FriendRequestListResource, '/api/v1/friend-requests')
+        api.add_resource(FriendRequestResource, '/api/v1/friend-requests/<int:request_id>')
+        api.add_resource(FriendshipResource, '/api/v1/friendships/<int:user_id>')
+        api.add_resource(FeedResource, '/api/v1/feed')
+        api.add_resource(CategoryResource, '/api/v1/categories/<string:category_name>/posts')
+        api.add_resource(InviteResource, '/api/v1/invites', '/api/v1/invites/<string:code>')
+        api.add_resource(ReportResource, '/api/v1/reports')
+
+        # --- Manually add routes for MyProfileResource --- 
+        # Instantiate the resource once (though it's stateless here)
+        my_profile_view = MyProfileResource() 
+
+        @app.route('/api/v1/profiles/me', methods=['GET'])
+        @login_required
+        def get_my_profile():
+            # Manually call the resource's get method
+            # Note: marshal_with won't apply automatically, but resource method returns dict.
+            # Return data with default 200 status.
+            response_data = my_profile_view.get()
+            return jsonify(response_data), 200
+
+        @app.route('/api/v1/profiles/me', methods=['PATCH'])
+        @login_required
+        def patch_my_profile():
+            # Manually call the resource's patch method
+            # Note: marshal_with won't apply automatically, resource method returns dict.
+            # Return data with default 200 status.
+            response_data = my_profile_view.patch()
+            return jsonify(response_data), 200
+
+        # --- User Loader for Flask-Login ---
+        @login_manager.user_loader
+        def load_user(user_id):
+            return User.query.get(int(user_id))
+
+        # --- Method Override (can stay as is) ---
+        @app.before_request
+        def method_override():
+            if request.form and '_method' in request.form:
+                method = request.form['_method'].upper()
+                if method in ['PUT', 'DELETE', 'PATCH']:
+                    request.environ['REQUEST_METHOD'] = method
+
+        # --- Routes for serving frontend ---
+        @app.route('/')
+        @app.route('/<path:path>')
+        def serve_react_app(path=None): # Optional path parameter
+            # Ensure os is available (it's imported at the top of app.py)
+            # Ensure send_from_directory is available (imported from flask at the top)
+            
+            # app.static_folder is 'frontend/dist'
+            # app.root_path is the absolute path to the directory where app.py is.
+            static_dir_abs = os.path.join(app.root_path, app.static_folder)
+
+            if path:
+                # Check if the requested path corresponds to an existing file
+                # in the static directory (e.g., /assets/main.js -> PROJECT_ROOT/frontend/dist/assets/main.js)
+                requested_file_abs = os.path.join(static_dir_abs, path)
+                # Ensure it's a file and not a directory to prevent issues
+                if os.path.exists(requested_file_abs) and os.path.isfile(requested_file_abs):
+                    # send_from_directory uses app.static_folder (which is 'frontend/dist')
+                    # and correctly resolves it relative to app.root_path.
+                    return send_from_directory(app.static_folder, path)
+            
+            # If 'path' is None (root URL /) or if 'path' does not point to an existing file,
+            # serve the index.html for client-side routing.
+            index_html_abs = os.path.join(static_dir_abs, 'index.html')
+            if os.path.exists(index_html_abs): # index.html must be a file
                 return send_from_directory(app.static_folder, 'index.html')
             else:
-                # Fallback if index.html is somehow missing
-                return jsonify({"error": "React app not found. Build the frontend first."}), 404
+                # Fallback if index.html itself is missing, with more detailed logging
+                app.logger.error(f"CRITICAL: index.html not found at {index_html_abs} (app.static_folder='{app.static_folder}', app.root_path='{app.root_path}')")
+                return jsonify({"error": "React app not found. Build the frontend first.", "detail": f"Looked for index.html at {index_html_abs}"}), 404
 
-    @app.route('/privacy')
-    def privacy_policy():
-        return render_template('privacy.html')
+        @app.route('/privacy')
+        def privacy_policy():
+            return render_template('privacy.html')
 
-    # --- Ampersounds Routes ---
+        # --- Ampersounds Routes ---
 
-    # Helper function to generate Ampersound file URL
-    def _get_ampersound_file_url(app_config, s3_key):
-        if not s3_key:
-            return None
-
-        s3_client = app_config.get('S3_CLIENT')
-        s3_bucket = app_config.get('S3_BUCKET')
-        domain_name_images = app_config.get('DOMAIN_NAME_IMAGES')
-        s3_endpoint_url = app_config.get('S3_ENDPOINT_URL')
-        s3_region = app_config.get('S3_REGION', 'us-east-1') # Default to us-east-1
-
-        file_url = None
-        if s3_client and s3_bucket:
-            try:
-                if domain_name_images:
-                    file_url = f"{domain_name_images}/{s3_key}"
-                elif s3_endpoint_url:
-                    file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-                else: # Assuming AWS S3 default URL structure
-                    if s3_region == 'auto': # 'auto' is not a valid region for URL construction
-                        # This case implies R2/Cloudflare, where S3_ENDPOINT_URL should be set.
-                        # If it's AWS S3 and region is 'auto', it's a misconfiguration.
-                        # For now, log a warning and return None.
-                        # app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region and no S3_ENDPOINT_URL.")
-                        # To use app.logger, this function needs access to 'current_app' or 'app' instance.
-                        # For simplicity in this helper, we'll assume config is sufficient.
-                        # If direct app logging is needed, 'app' must be passed or accessed via current_app.
-                        print(f"WARN: Cannot construct S3 URL for {s3_key} with 'auto' region and no S3_ENDPOINT_URL.")
-                        return None
-                    file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
-            except Exception as e:
-                # Similar logging concern as above.
-                print(f"ERROR: Error generating URL for ampersound with key {s3_key}: {e}")
+        # Helper function to generate Ampersound file URL
+        def _get_ampersound_file_url(app_config, s3_key):
+            if not s3_key:
                 return None
-        return file_url
 
-    @app.route('/api/v1/ampersounds', methods=['POST'])
-    @login_required
-    def create_ampersound():
-        if 'audio_file' not in request.files:
-            return jsonify({"message": "No audio file part"}), 400
-        file = request.files['audio_file']
-        name = request.form.get('name')
-        privacy = request.form.get('privacy', 'public').lower()
+            s3_client = app_config.get('S3_CLIENT')
+            s3_bucket = app_config.get('S3_BUCKET')
+            domain_name_images = app_config.get('DOMAIN_NAME_IMAGES')
+            s3_endpoint_url = app_config.get('S3_ENDPOINT_URL')
+            s3_region = app_config.get('S3_REGION', 'us-east-1') # Default to us-east-1
 
-        if privacy not in ['public', 'friends']:
-            privacy = 'public' # Default to public if invalid value is provided
+            file_url = None
+            if s3_client and s3_bucket:
+                try:
+                    if domain_name_images:
+                        file_url = f"{domain_name_images}/{s3_key}"
+                    elif s3_endpoint_url:
+                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                    else: # Assuming AWS S3 default URL structure
+                        if s3_region == 'auto': # 'auto' is not a valid region for URL construction
+                            # This case implies R2/Cloudflare, where S3_ENDPOINT_URL should be set.
+                            # If it's AWS S3 and region is 'auto', it's a misconfiguration.
+                            # For now, log a warning and return None.
+                            # app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region and no S3_ENDPOINT_URL.")
+                            # To use app.logger, this function needs access to 'current_app' or 'app' instance.
+                            # For simplicity in this helper, we'll assume config is sufficient.
+                            # If direct app logging is needed, 'app' must be passed or accessed via current_app.
+                            print(f"WARN: Cannot construct S3 URL for {s3_key} with 'auto' region and no S3_ENDPOINT_URL.")
+                            return None
+                        file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                except Exception as e:
+                    # Similar logging concern as above.
+                    print(f"ERROR: Error generating URL for ampersound with key {s3_key}: {e}")
+                    return None
+            return file_url
 
-        if not name:
-            return jsonify({"message": "Ampersound name is required"}), 400
-        
-        # Validate name (simple validation for now: alphanumeric, no spaces)
-        # The name will be used in URLs and as a tag, so keep it simple.
-        clean_name = secure_filename(name).lower() # basic sanitization
-        if not clean_name or clean_name != name.lower() or '&' in clean_name or ' ' in clean_name:
-            return jsonify({"message": "Invalid Ampersound name. Use alphanumeric characters without spaces or '&'."}), 400
+        @app.route('/api/v1/ampersounds', methods=['POST'])
+        @login_required
+        def create_ampersound():
+            if 'audio_file' not in request.files:
+                return jsonify({"message": "No audio file part"}), 400
+            file = request.files['audio_file']
+            name = request.form.get('name')
+            privacy = request.form.get('privacy', 'public').lower()
 
-        if file.filename == '':
-            return jsonify({"message": "No selected file"}), 400
+            if privacy not in ['public', 'friends']:
+                privacy = 'public' # Default to public if invalid value is provided
 
-        # Check if an ampersound with this name already exists for the user
-        existing_ampersound = Ampersound.query.filter_by(user_id=current_user.id, name=clean_name).first()
-        if existing_ampersound:
-            return jsonify({"message": f"You already have an Ampersound named '{clean_name}'."}), 409 # Conflict
-
-        if file and s3_client:
-            filename = secure_filename(file.filename)
-            # Try to guess extension, default to .mp3 or .wav if not found
-            content_type = file.mimetype
-            extension = mimetypes.guess_extension(content_type)
-            if not extension:
-                # Fallback for common audio types if mimetypes fails or is too generic (e.g. application/octet-stream)
-                if 'webm' in content_type:
-                    extension = '.webm'
-                elif 'wav' in content_type:
-                    extension = '.wav'
-                elif 'ogg' in content_type:
-                    extension = '.ogg'
-                else:
-                    extension = '.mp3' # Default fallback
+            if not name:
+                return jsonify({"message": "Ampersound name is required"}), 400
             
-            s3_filename = f"ampersounds/{current_user.id}/{clean_name}{extension}"
-            s3_bucket = app.config['S3_BUCKET']
+            # Validate name (simple validation for now: alphanumeric, no spaces)
+            # The name will be used in URLs and as a tag, so keep it simple.
+            clean_name = secure_filename(name).lower() # basic sanitization
+            if not clean_name or clean_name != name.lower() or '&' in clean_name or ' ' in clean_name:
+                return jsonify({"message": "Invalid Ampersound name. Use alphanumeric characters without spaces or '&'."}), 400
+
+            if file.filename == '':
+                return jsonify({"message": "No selected file"}), 400
+
+            # Check if an ampersound with this name already exists for the user
+            existing_ampersound = Ampersound.query.filter_by(user_id=current_user.id, name=clean_name).first()
+            if existing_ampersound:
+                return jsonify({"message": f"You already have an Ampersound named '{clean_name}'."}), 409 # Conflict
+
+            if file and s3_client:
+                filename = secure_filename(file.filename)
+                # Try to guess extension, default to .mp3 or .wav if not found
+                content_type = file.mimetype
+                extension = mimetypes.guess_extension(content_type)
+                if not extension:
+                    # Fallback for common audio types if mimetypes fails or is too generic (e.g. application/octet-stream)
+                    if 'webm' in content_type:
+                        extension = '.webm'
+                    elif 'wav' in content_type:
+                        extension = '.wav'
+                    elif 'ogg' in content_type:
+                        extension = '.ogg'
+                    else:
+                        extension = '.mp3' # Default fallback
+                
+                s3_filename = f"ampersounds/{current_user.id}/{clean_name}{extension}"
+                s3_bucket = app.config['S3_BUCKET']
+
+                try:
+                    s3_client.upload_fileobj(
+                        file,
+                        s3_bucket,
+                        s3_filename,
+                        ExtraArgs={'ContentType': content_type}
+                    )
+                    # Use the helper function to get the file_url
+                    file_url = _get_ampersound_file_url(app.config, s3_filename)
+                    # The following commented block was part of the original logic for URL generation
+                    # and is now replaced by the call to _get_ampersound_file_url above.
+                    # if app.config.get('S3_ENDPOINT_URL') and not app.config.get('DOMAIN_NAME_IMAGES'):
+                    #     # If using a custom endpoint (like MinIO/R2) and no specific domain for images,
+                    #     # construct URL based on bucket and endpoint.
+                    #     # This might need adjustment based on S3 provider's URL structure.
+                    #     file_url = f"{app.config['S3_ENDPOINT_URL']}/{s3_bucket}/{s3_filename}"
+
+                    ampersound = Ampersound(
+                        user_id=current_user.id,
+                        name=clean_name,
+                        file_path=s3_filename, # Store S3 key/path
+                        privacy=privacy
+                    )
+                    db.session.add(ampersound)
+                    db.session.commit()
+                    return jsonify({"message": "Ampersound created successfully!", "name": clean_name, "url": file_url, "ampersound_id": ampersound.id}), 201
+                except Exception as e:
+                    app.logger.error(f"Error uploading ampersound to S3: {e}")
+                    return jsonify({"message": "Error uploading file to S3."}), 500
+            elif not s3_client:
+                return jsonify({"message": "File storage (S3) is not configured on the server."}), 500
+            else:
+                return jsonify({"message": "Invalid file."}), 400
+
+        @app.route('/ampersounds/<string:username>/<string:sound_name>', methods=['GET'])
+        def get_ampersound(username, sound_name):
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                return jsonify({"message": "User not found"}), 404
+
+            clean_sound_name = secure_filename(sound_name).lower()
+            ampersound = Ampersound.query.filter_by(user_id=user.id, name=clean_sound_name).first()
+            if not ampersound:
+                return jsonify({"message": "Ampersound not found"}), 404
+
+            # Privacy check
+            can_view = False
+            if ampersound.privacy == 'public':
+                can_view = True
+            elif ampersound.privacy == 'friends':
+                if current_user.is_authenticated:
+                    if ampersound.user_id == current_user.id or current_user.is_friend(ampersound.user):
+                        can_view = True
+            
+            if not can_view:
+                return jsonify({"message": "You do not have permission to view this Ampersound"}), 403
+
+            # Increment play_count
+            try:
+                ampersound.play_count = (Ampersound.play_count or 0) + 1 # Ensure play_count is not None before incrementing
+                db.session.add(ampersound) # Add to session, or it might already be there
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error incrementing play_count for ampersound {ampersound.id}: {e}")
+                # Decide if this should be a critical error or just logged. For now, we log and continue.
+
+            s3_client = app.config.get('S3_CLIENT') # Get S3 client from app config
+            s3_bucket = app.config.get('S3_BUCKET')
+            domain_name = app.config.get('DOMAIN_NAME_IMAGES')
+            s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
+            s3_key = ampersound.file_path
 
             try:
-                s3_client.upload_fileobj(
-                    file,
-                    s3_bucket,
-                    s3_filename,
-                    ExtraArgs={'ContentType': content_type}
-                )
-                # Use the helper function to get the file_url
-                file_url = _get_ampersound_file_url(app.config, s3_filename)
-                # The following commented block was part of the original logic for URL generation
-                # and is now replaced by the call to _get_ampersound_file_url above.
-                # if app.config.get('S3_ENDPOINT_URL') and not app.config.get('DOMAIN_NAME_IMAGES'):
-                #     # If using a custom endpoint (like MinIO/R2) and no specific domain for images,
-                #     # construct URL based on bucket and endpoint.
-                #     # This might need adjustment based on S3 provider's URL structure.
-                #     file_url = f"{app.config['S3_ENDPOINT_URL']}/{s3_bucket}/{s3_filename}"
-
-                ampersound = Ampersound(
-                    user_id=current_user.id,
-                    name=clean_name,
-                    file_path=s3_filename, # Store S3 key/path
-                    privacy=privacy
-                )
-                db.session.add(ampersound)
-                db.session.commit()
-                return jsonify({"message": "Ampersound created successfully!", "name": clean_name, "url": file_url, "ampersound_id": ampersound.id}), 201
+                file_url = _get_ampersound_file_url(app.config, s3_key)
+                if not file_url:
+                     # Log the issue if URL generation failed
+                    app.logger.error(f"Failed to generate URL for ampersound {ampersound.id} with key {s3_key}")
+                    return jsonify({"message": "Error retrieving Ampersound URL due to configuration issue."}), 500
+                # if domain_name: 
+                #     file_url = f"{domain_name}/{s3_key}"
+                # elif s3_endpoint_url: 
+                #     file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                # else: 
+                #     s3_region = app.config.get('S3_REGION', 'us-east-1') 
+                #     if s3_region == 'auto': 
+                #         return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
+                #     file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                
+                return jsonify({
+                    "name": ampersound.name, 
+                    "url": file_url, 
+                    "user": user.username, 
+                    "play_count": ampersound.play_count,
+                    "privacy": ampersound.privacy # Include privacy in response
+                }), 200
             except Exception as e:
-                app.logger.error(f"Error uploading ampersound to S3: {e}")
-                return jsonify({"message": "Error uploading file to S3."}), 500
-        elif not s3_client:
-            return jsonify({"message": "File storage (S3) is not configured on the server."}), 500
-        else:
-            return jsonify({"message": "Invalid file."}), 400
+                app.logger.error(f"Error generating Ampersound URL for {ampersound.id}: {e}")
+                return jsonify({"message": "Error retrieving Ampersound URL."}), 500
 
-    @app.route('/ampersounds/<string:username>/<string:sound_name>', methods=['GET'])
-    def get_ampersound(username, sound_name):
-        user = User.query.filter_by(username=username).first()
-        if not user:
-            return jsonify({"message": "User not found"}), 404
+        @app.route('/api/v1/ampersounds/my_sounds', methods=['GET'])
+        @login_required
+        def list_my_ampersounds():
+            user_ampersounds = Ampersound.query.filter_by(user_id=current_user.id).order_by(Ampersound.timestamp.desc()).all()
+            
+            results = []
+            for ampersound in user_ampersounds:
+                file_url = _get_ampersound_file_url(app.config, ampersound.file_path)
+                
+                results.append({
+                    'id': ampersound.id,
+                    'name': ampersound.name,
+                    'file_path': ampersound.file_path, # Or use the generated file_url
+                    'url': file_url, # The generated playable URL
+                    'timestamp': ampersound.timestamp.isoformat(),
+                    'privacy': ampersound.privacy # Include privacy setting
+                })
+            
+            return jsonify(results), 200
 
-        clean_sound_name = secure_filename(sound_name).lower()
-        ampersound = Ampersound.query.filter_by(user_id=user.id, name=clean_sound_name).first()
-        if not ampersound:
-            return jsonify({"message": "Ampersound not found"}), 404
+        @app.route('/api/v1/ampersounds/all', methods=['GET'])
+        def list_all_ampersounds():
+            base_query = (
+                Ampersound.query
+                .join(User, User.id == Ampersound.user_id)
+                .options(joinedload(Ampersound.user))
+            )
 
-        # Privacy check
-        can_view = False
-        if ampersound.privacy == 'public':
-            can_view = True
-        elif ampersound.privacy == 'friends':
             if current_user.is_authenticated:
-                if ampersound.user_id == current_user.id or current_user.is_friend(ampersound.user):
-                    can_view = True
-        
-        if not can_view:
-            return jsonify({"message": "You do not have permission to view this Ampersound"}), 403
-
-        # Increment play_count
-        try:
-            ampersound.play_count = (Ampersound.play_count or 0) + 1 # Ensure play_count is not None before incrementing
-            db.session.add(ampersound) # Add to session, or it might already be there
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error incrementing play_count for ampersound {ampersound.id}: {e}")
-            # Decide if this should be a critical error or just logged. For now, we log and continue.
-
-        s3_client = app.config.get('S3_CLIENT') # Get S3 client from app config
-        s3_bucket = app.config.get('S3_BUCKET')
-        domain_name = app.config.get('DOMAIN_NAME_IMAGES')
-        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
-        s3_key = ampersound.file_path
-
-        try:
-            file_url = _get_ampersound_file_url(app.config, s3_key)
-            if not file_url:
-                 # Log the issue if URL generation failed
-                app.logger.error(f"Failed to generate URL for ampersound {ampersound.id} with key {s3_key}")
-                return jsonify({"message": "Error retrieving Ampersound URL due to configuration issue."}), 500
-            # if domain_name: 
-            #     file_url = f"{domain_name}/{s3_key}"
-            # elif s3_endpoint_url: 
-            #     file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-            # else: 
-            #     s3_region = app.config.get('S3_REGION', 'us-east-1') 
-            #     if s3_region == 'auto': 
-            #         return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
-            #     file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
-            
-            return jsonify({
-                "name": ampersound.name, 
-                "url": file_url, 
-                "user": user.username, 
-                "play_count": ampersound.play_count,
-                "privacy": ampersound.privacy # Include privacy in response
-            }), 200
-        except Exception as e:
-            app.logger.error(f"Error generating Ampersound URL for {ampersound.id}: {e}")
-            return jsonify({"message": "Error retrieving Ampersound URL."}), 500
-
-    @app.route('/api/v1/ampersounds/my_sounds', methods=['GET'])
-    @login_required
-    def list_my_ampersounds():
-        user_ampersounds = Ampersound.query.filter_by(user_id=current_user.id).order_by(Ampersound.timestamp.desc()).all()
-        
-        results = []
-        for ampersound in user_ampersounds:
-            file_url = _get_ampersound_file_url(app.config, ampersound.file_path)
-            
-            results.append({
-                'id': ampersound.id,
-                'name': ampersound.name,
-                'file_path': ampersound.file_path, # Or use the generated file_url
-                'url': file_url, # The generated playable URL
-                'timestamp': ampersound.timestamp.isoformat(),
-                'privacy': ampersound.privacy # Include privacy setting
-            })
-        
-        return jsonify(results), 200
-
-    @app.route('/api/v1/ampersounds/all', methods=['GET'])
-    def list_all_ampersounds():
-        base_query = (
-            Ampersound.query
-            .join(User, User.id == Ampersound.user_id)
-            .options(joinedload(Ampersound.user))
-        )
-
-        if current_user.is_authenticated:
-            friend_ids = current_user.get_friend_ids()
-            # Show public ampersounds OR friends-only ampersounds from friends OR ampersounds owned by the current user
-            base_query = base_query.filter(
-                or_(
-                    Ampersound.privacy == 'public',
-                    and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
-                    Ampersound.user_id == current_user.id # Always show user's own ampersounds
+                friend_ids = current_user.get_friend_ids()
+                # Show public ampersounds OR friends-only ampersounds from friends OR ampersounds owned by the current user
+                base_query = base_query.filter(
+                    or_(
+                        Ampersound.privacy == 'public',
+                        and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
+                        Ampersound.user_id == current_user.id # Always show user's own ampersounds
+                    )
                 )
+            else:
+                # For anonymous users, only show public ampersounds
+                base_query = base_query.filter(Ampersound.privacy == 'public')
+
+            all_ampersounds = (
+                base_query
+                .order_by(Ampersound.play_count.desc(), Ampersound.timestamp.desc())
+                .limit(50)
+                .all()
             )
-        else:
-            # For anonymous users, only show public ampersounds
-            base_query = base_query.filter(Ampersound.privacy == 'public')
 
-        all_ampersounds = (
-            base_query
-            .order_by(Ampersound.play_count.desc(), Ampersound.timestamp.desc())
-            .limit(50)
-            .all()
-        )
-
-        results = []
-        for ampersound in all_ampersounds:
-            file_url = _get_ampersound_file_url(app.config, ampersound.file_path)
+            results = []
+            for ampersound in all_ampersounds:
+                file_url = _get_ampersound_file_url(app.config, ampersound.file_path)
+                
+                results.append({
+                    'id': ampersound.id,
+                    'name': ampersound.name,
+                    'user': {
+                        'id': ampersound.user.id,
+                        'username': ampersound.user.username
+                    },
+                    'url': file_url,
+                    'timestamp': ampersound.timestamp.isoformat(),
+                    'play_count': ampersound.play_count, # Include play_count in response
+                    'privacy': ampersound.privacy # Include privacy in response
+                })
             
-            results.append({
-                'id': ampersound.id,
-                'name': ampersound.name,
-                'user': {
-                    'id': ampersound.user.id,
-                    'username': ampersound.user.username
-                },
-                'url': file_url,
-                'timestamp': ampersound.timestamp.isoformat(),
-                'play_count': ampersound.play_count, # Include play_count in response
-                'privacy': ampersound.privacy # Include privacy in response
-            })
-        
-        return jsonify(results), 200
+            return jsonify(results), 200
 
-    @app.route('/api/v1/ampersounds/<int:sound_id>', methods=['DELETE'])
-    @login_required
-    def delete_ampersound(sound_id):
-        ampersound = Ampersound.query.get(sound_id)
+        @app.route('/api/v1/ampersounds/<int:sound_id>', methods=['DELETE'])
+        @login_required
+        def delete_ampersound(sound_id):
+            ampersound = Ampersound.query.get(sound_id)
 
-        if not ampersound:
-            return jsonify({"message": "Ampersound not found"}), 404
+            if not ampersound:
+                return jsonify({"message": "Ampersound not found"}), 404
 
-        # Verify ownership
-        if ampersound.user_id != current_user.id:
-            return jsonify({"message": "You do not have permission to delete this Ampersound"}), 403 # Forbidden
+            # Verify ownership
+            if ampersound.user_id != current_user.id:
+                return jsonify({"message": "You do not have permission to delete this Ampersound"}), 403 # Forbidden
 
-        s3_client = app.config.get('S3_CLIENT')
-        s3_bucket = app.config.get('S3_BUCKET')
-        s3_key_to_delete = ampersound.file_path
+            s3_client = app.config.get('S3_CLIENT')
+            s3_bucket = app.config.get('S3_BUCKET')
+            s3_key_to_delete = ampersound.file_path
 
-        try:
-            # Delete from DB first
-            db.session.delete(ampersound)
-            db.session.commit()
+            try:
+                # Delete from DB first
+                db.session.delete(ampersound)
+                db.session.commit()
 
-            # Then attempt to delete from S3
-            if s3_client and s3_bucket and s3_key_to_delete:
+                # Then attempt to delete from S3
+                if s3_client and s3_bucket and s3_key_to_delete:
+                    try:
+                        s3_client.delete_object(Bucket=s3_bucket, Key=s3_key_to_delete)
+                        app.logger.info(f"Successfully deleted S3 object: {s3_key_to_delete}")
+                    except Exception as s3_error:
+                        # Log S3 deletion error but don't fail the request if DB delete succeeded
+                        app.logger.error(f"Error deleting S3 object {s3_key_to_delete} for deleted ampersound {sound_id}: {s3_error}")
+                
+                return jsonify({"message": "Ampersound deleted successfully"}), 200
+            
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Error deleting ampersound {sound_id} from database: {e}")
+                return jsonify({"message": "Failed to delete Ampersound"}), 500
+
+        @app.route('/api/v1/ampersounds/search', methods=['GET'])
+        def search_ampersounds():
+            query_term = request.args.get('q', '').strip()
+            limit = request.args.get('limit', 10, type=int)
+
+            if not query_term:
+                return jsonify([]) 
+
+            results = []
+            username_part = None
+            soundname_part = None
+            base_query = Ampersound.query.join(User, User.id == Ampersound.user_id)
+
+            if '.' in query_term:
+                parts = query_term.split('.', 1)
+                username_part = parts[0]
+                soundname_part = parts[1]
+                username_pattern = f"{username_part}%"
+                soundname_pattern = f"{soundname_part}%"
+                base_query = base_query.filter(
+                    func.lower(User.username).ilike(username_pattern),
+                    func.lower(Ampersound.name).ilike(soundname_pattern)
+                )
+            else:
+                soundname_pattern = f"{query_term}%"
+                base_query = base_query.filter(func.lower(Ampersound.name).ilike(soundname_pattern))
+
+            # Apply privacy filtering
+            if current_user.is_authenticated:
+                friend_ids = current_user.get_friend_ids()
+                base_query = base_query.filter(
+                    or_(
+                        Ampersound.privacy == 'public',
+                        and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
+                        Ampersound.user_id == current_user.id
+                    )
+                )
+            else:
+                # Anonymous users only see public results in search too
+                base_query = base_query.filter(Ampersound.privacy == 'public')
+
+            ampersounds_query = (
+                base_query
+                .options(joinedload(Ampersound.user))
+                .order_by(User.username, Ampersound.name) # Consider if order_by needs adjustment post-privacy
+                .limit(limit)
+            )
+
+            found_ampersounds = ampersounds_query.all()
+            
+            for sound in found_ampersounds:
+                tag = f"&{sound.user.username}.{sound.name}"
+                file_url = _get_ampersound_file_url(app.config, sound.file_path) # Generate URL
+
+                results.append({
+                    "id": sound.id, # Include ID for potential future use
+                    "tag": tag,
+                    "user": {
+                        "id": sound.user.id,
+                        "username": sound.user.username
+                    },
+                    "name": sound.name,
+                    "url": file_url, # Add the generated URL
+                    "privacy": sound.privacy # Include privacy setting
+                })
+
+            return jsonify(results)
+
+        @app.route('/api/v1/profiles/upload_picture', methods=['POST'])
+        @login_required
+        def upload_profile_picture():
+            if 'file' not in request.files:
+                return jsonify({"message": "No file part"}), 400
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({"message": "No selected file"}), 400
+
+            # Check file type is an image
+            if not file.content_type.startswith('image/'):
+                return jsonify({"message": "File must be an image"}), 400
+
+            s3_client = app.config.get('S3_CLIENT')
+            if file and s3_client:
                 try:
-                    s3_client.delete_object(Bucket=s3_bucket, Key=s3_key_to_delete)
-                    app.logger.info(f"Successfully deleted S3 object: {s3_key_to_delete}")
-                except Exception as s3_error:
-                    # Log S3 deletion error but don't fail the request if DB delete succeeded
-                    app.logger.error(f"Error deleting S3 object {s3_key_to_delete} for deleted ampersound {sound_id}: {s3_error}")
+                    # Generate a filename with user ID to ensure uniqueness
+                    filename = secure_filename(file.filename)
+                    # Extract extension
+                    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
+                    s3_filename = f"profile_pictures/{current_user.id}/{uuid.uuid4()}.{ext}"
+                    s3_bucket = app.config['S3_BUCKET']
+
+                    s3_client.upload_fileobj(
+                        file,
+                        s3_bucket,
+                        s3_filename,
+                        ExtraArgs={'ContentType': file.content_type}
+                    )
+                    
+                    # Generate file URL using the helper function for ampersounds
+                    file_url = _get_ampersound_file_url(app.config, s3_filename)
+                    
+                    # Update user's profile_picture field
+                    current_user.profile_picture = file_url
+                    db.session.commit()
+                    
+                    return jsonify({
+                        "message": "Profile picture updated successfully",
+                        "profile_picture": file_url
+                    }), 200
+                    
+                except Exception as e:
+                    app.logger.error(f"Error uploading profile picture to S3: {e}")
+                    return jsonify({"message": "Error uploading file to S3."}), 500
+            elif not s3_client:
+                return jsonify({"message": "File storage (S3) is not configured on the server."}), 500
+            else:
+                return jsonify({"message": "Invalid file."}), 400
             
-            return jsonify({"message": "Ampersound deleted successfully"}), 200
-        
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error deleting ampersound {sound_id} from database: {e}")
-            return jsonify({"message": "Failed to delete Ampersound"}), 500
-
-    @app.route('/api/v1/ampersounds/search', methods=['GET'])
-    def search_ampersounds():
-        query_term = request.args.get('q', '').strip()
-        limit = request.args.get('limit', 10, type=int)
-
-        if not query_term:
-            return jsonify([]) 
-
-        results = []
-        username_part = None
-        soundname_part = None
-        base_query = Ampersound.query.join(User, User.id == Ampersound.user_id)
-
-        if '.' in query_term:
-            parts = query_term.split('.', 1)
-            username_part = parts[0]
-            soundname_part = parts[1]
-            username_pattern = f"{username_part}%"
-            soundname_pattern = f"{soundname_part}%"
-            base_query = base_query.filter(
-                func.lower(User.username).ilike(username_pattern),
-                func.lower(Ampersound.name).ilike(soundname_pattern)
-            )
-        else:
-            soundname_pattern = f"{query_term}%"
-            base_query = base_query.filter(func.lower(Ampersound.name).ilike(soundname_pattern))
-
-        # Apply privacy filtering
-        if current_user.is_authenticated:
-            friend_ids = current_user.get_friend_ids()
-            base_query = base_query.filter(
-                or_(
-                    Ampersound.privacy == 'public',
-                    and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
-                    Ampersound.user_id == current_user.id
-                )
-            )
-        else:
-            # Anonymous users only see public results in search too
-            base_query = base_query.filter(Ampersound.privacy == 'public')
-
-        ampersounds_query = (
-            base_query
-            .options(joinedload(Ampersound.user))
-            .order_by(User.username, Ampersound.name) # Consider if order_by needs adjustment post-privacy
-            .limit(limit)
-        )
-
-        found_ampersounds = ampersounds_query.all()
-        
-        for sound in found_ampersounds:
-            tag = f"&{sound.user.username}.{sound.name}"
-            file_url = _get_ampersound_file_url(app.config, sound.file_path) # Generate URL
-
-            results.append({
-                "id": sound.id, # Include ID for potential future use
-                "tag": tag,
-                "user": {
-                    "id": sound.user.id,
-                    "username": sound.user.username
-                },
-                "name": sound.name,
-                "url": file_url, # Add the generated URL
-                "privacy": sound.privacy # Include privacy setting
-            })
-
-        return jsonify(results)
-
-    return app
+        return app # Return the app instance if setup is successful
+    except Exception as e: # Catch exceptions during app creation
+        print(f"CRITICAL ERROR during Flask app creation (config: {config_name}): {e}")
+        import traceback
+        print(traceback.format_exc()) # Print full traceback for debugging
+        return None # Return None as expected by the calling code
 
 # Create app instance for Gunicorn/WSGI server
 # FLASK_CONFIG should be 'production' in the Heroku environment.
@@ -762,9 +831,17 @@ if __name__ == '__main__':
     # Host '0.0.0.0' is also good practice for containerized environments.
     config_name_for_run = os.getenv('FLASK_CONFIG') or 'default'
     app_for_run = create_app(config_name_for_run)
+    
+    # Verify app was created successfully
+    if app_for_run is None:
+        print("ERROR: Failed to create Flask application")
+        sys.exit(1)
+    
     # Heroku dynamically assigns a port, so use PORT environment variable.
     # Default to 5000 for local development if PORT is not set.
     port = int(os.environ.get("PORT", 5000))
+    
+    # Run the app
     app_for_run.run(debug=app_for_run.config['DEBUG'], host='0.0.0.0', port=port)
 
 
