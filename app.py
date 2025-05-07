@@ -20,8 +20,6 @@ import re # Import regular expression module
 from extensions import db, login_manager, migrate
 # Import models here if they don't depend on the app instance directly at import time
 # If models.py imports 'app', this needs further adjustment.
-# Corrected imports: Use InviteCode instead of Invite.
-# Removed Profile, Friendship, and Category as they don't exist as distinct models.
 from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy, Ampersound
 
 # Import Resources AFTER defining configurations and extensions
@@ -261,10 +259,6 @@ class GemmaClassification:
 
 # --- Application Factory ---
 def create_app(config_name='default'):
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    print(f"!!! DEBUG: create_app FUNCTION CALLED    !!!")
-    print(f"!!! DEBUG: config_name = {config_name}        !!!")
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     
     try:
         app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
@@ -567,15 +561,6 @@ def create_app(config_name='default'):
                      # Log the issue if URL generation failed
                     app.logger.error(f"Failed to generate URL for ampersound {ampersound.id} with key {s3_key}")
                     return jsonify({"message": "Error retrieving Ampersound URL due to configuration issue."}), 500
-                # if domain_name: 
-                #     file_url = f"{domain_name}/{s3_key}"
-                # elif s3_endpoint_url: 
-                #     file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-                # else: 
-                #     s3_region = app.config.get('S3_REGION', 'us-east-1') 
-                #     if s3_region == 'auto': 
-                #         return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
-                #     file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
                 
                 return jsonify({
                     "name": ampersound.name, 
@@ -844,13 +829,3 @@ if __name__ == '__main__':
     # Run the app
     app_for_run.run(debug=app_for_run.config['DEBUG'], host='0.0.0.0', port=port)
 
-
-# Remove old app instantiation and config loading that's now inside create_app
-# ... (delete the old 'app = Flask(...)' and subsequent app.config lines) ...
-# Remove old api = Api(app) line
-# Remove old db.init_app(app), login_manager.init_app(app), migrate.init_app(app, db) lines
-# Remove old s3_client and openai_client initializations outside the factory
-# Remove old GemmaClassification instantiation outside the factory
-# Remove old @login_manager.user_loader (moved inside factory)
-# Remove old @app.before_request method_override (moved inside factory)
-# Remove old @app.route definitions for serving frontend (moved inside factory)
