@@ -391,6 +391,42 @@ def create_app(config_name='default'):
 
     # --- Ampersounds Routes ---
 
+    # Helper function to generate Ampersound file URL
+    def _get_ampersound_file_url(app_config, s3_key):
+        if not s3_key:
+            return None
+
+        s3_client = app_config.get('S3_CLIENT')
+        s3_bucket = app_config.get('S3_BUCKET')
+        domain_name_images = app_config.get('DOMAIN_NAME_IMAGES')
+        s3_endpoint_url = app_config.get('S3_ENDPOINT_URL')
+        s3_region = app_config.get('S3_REGION', 'us-east-1') # Default to us-east-1
+
+        file_url = None
+        if s3_client and s3_bucket:
+            try:
+                if domain_name_images:
+                    file_url = f"{domain_name_images}/{s3_key}"
+                elif s3_endpoint_url:
+                    file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+                else: # Assuming AWS S3 default URL structure
+                    if s3_region == 'auto': # 'auto' is not a valid region for URL construction
+                        # This case implies R2/Cloudflare, where S3_ENDPOINT_URL should be set.
+                        # If it's AWS S3 and region is 'auto', it's a misconfiguration.
+                        # For now, log a warning and return None.
+                        # app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region and no S3_ENDPOINT_URL.")
+                        # To use app.logger, this function needs access to 'current_app' or 'app' instance.
+                        # For simplicity in this helper, we'll assume config is sufficient.
+                        # If direct app logging is needed, 'app' must be passed or accessed via current_app.
+                        print(f"WARN: Cannot construct S3 URL for {s3_key} with 'auto' region and no S3_ENDPOINT_URL.")
+                        return None
+                    file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+            except Exception as e:
+                # Similar logging concern as above.
+                print(f"ERROR: Error generating URL for ampersound with key {s3_key}: {e}")
+                return None
+        return file_url
+
     @app.route('/api/v1/ampersounds', methods=['POST'])
     @login_required
     def create_ampersound():
@@ -446,12 +482,15 @@ def create_app(config_name='default'):
                     s3_filename,
                     ExtraArgs={'ContentType': content_type}
                 )
-                file_url = f"{app.config.get('DOMAIN_NAME_IMAGES', '')}/{s3_filename}" # Assuming DOMAIN_NAME_IMAGES is the base URL for S3 content
-                if app.config.get('S3_ENDPOINT_URL') and not app.config.get('DOMAIN_NAME_IMAGES'):
-                    # If using a custom endpoint (like MinIO/R2) and no specific domain for images,
-                    # construct URL based on bucket and endpoint.
-                    # This might need adjustment based on S3 provider's URL structure.
-                    file_url = f"{app.config['S3_ENDPOINT_URL']}/{s3_bucket}/{s3_filename}"
+                # Use the helper function to get the file_url
+                file_url = _get_ampersound_file_url(app.config, s3_filename)
+                # The following commented block was part of the original logic for URL generation
+                # and is now replaced by the call to _get_ampersound_file_url above.
+                # if app.config.get('S3_ENDPOINT_URL') and not app.config.get('DOMAIN_NAME_IMAGES'):
+                #     # If using a custom endpoint (like MinIO/R2) and no specific domain for images,
+                #     # construct URL based on bucket and endpoint.
+                #     # This might need adjustment based on S3 provider's URL structure.
+                #     file_url = f"{app.config['S3_ENDPOINT_URL']}/{s3_bucket}/{s3_filename}"
 
                 ampersound = Ampersound(
                     user_id=current_user.id,
@@ -510,15 +549,20 @@ def create_app(config_name='default'):
         s3_key = ampersound.file_path
 
         try:
-            if domain_name: 
-                file_url = f"{domain_name}/{s3_key}"
-            elif s3_endpoint_url: 
-                file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-            else: 
-                s3_region = app.config.get('S3_REGION', 'us-east-1') 
-                if s3_region == 'auto': 
-                    return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
-                file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+            file_url = _get_ampersound_file_url(app.config, s3_key)
+            if not file_url:
+                 # Log the issue if URL generation failed
+                app.logger.error(f"Failed to generate URL for ampersound {ampersound.id} with key {s3_key}")
+                return jsonify({"message": "Error retrieving Ampersound URL due to configuration issue."}), 500
+            # if domain_name: 
+            #     file_url = f"{domain_name}/{s3_key}"
+            # elif s3_endpoint_url: 
+            #     file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
+            # else: 
+            #     s3_region = app.config.get('S3_REGION', 'us-east-1') 
+            #     if s3_region == 'auto': 
+            #         return jsonify({"message": "Cannot construct S3 URL with 'auto' region for AWS S3."}), 500
+            #     file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
             
             return jsonify({
                 "name": ampersound.name, 
@@ -536,30 +580,9 @@ def create_app(config_name='default'):
     def list_my_ampersounds():
         user_ampersounds = Ampersound.query.filter_by(user_id=current_user.id).order_by(Ampersound.timestamp.desc()).all()
         
-        s3_client = app.config.get('S3_CLIENT') # Get S3 client from app config
-        s3_bucket = app.config.get('S3_BUCKET')
-        domain_name_images = app.config.get('DOMAIN_NAME_IMAGES')
-        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
-        s3_region = app.config.get('S3_REGION', 'us-east-1')
-
         results = []
         for ampersound in user_ampersounds:
-            file_url = None
-            if s3_client and s3_bucket:
-                s3_key = ampersound.file_path
-                try:
-                    if domain_name_images:
-                        file_url = f"{domain_name_images}/{s3_key}"
-                    elif s3_endpoint_url:
-                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-                    else:
-                        if s3_region == 'auto': # Should not happen if properly configured for AWS S3
-                            app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region for AWS S3.")
-                            file_url = None # Or some placeholder/error indicator
-                        else:
-                            file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
-                except Exception as e:
-                    app.logger.error(f"Error generating URL for ampersound {ampersound.id}: {e}")
+            file_url = _get_ampersound_file_url(app.config, ampersound.file_path)
             
             results.append({
                 'id': ampersound.id,
@@ -601,29 +624,9 @@ def create_app(config_name='default'):
             .all()
         )
 
-        s3_client = app.config.get('S3_CLIENT')
-        s3_bucket = app.config.get('S3_BUCKET')
-        domain_name_images = app.config.get('DOMAIN_NAME_IMAGES')
-        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
-        s3_region = app.config.get('S3_REGION', 'us-east-1')
-
         results = []
         for ampersound in all_ampersounds:
-            file_url = None
-            if s3_client and s3_bucket:
-                s3_key = ampersound.file_path
-                try:
-                    if domain_name_images:
-                        file_url = f"{domain_name_images}/{s3_key}"
-                    elif s3_endpoint_url:
-                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-                    else:
-                        if s3_region == 'auto':
-                            app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region for AWS S3.")
-                        else:
-                            file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
-                except Exception as e:
-                    app.logger.error(f"Error generating URL for ampersound {ampersound.id}: {e}")
+            file_url = _get_ampersound_file_url(app.config, ampersound.file_path)
             
             results.append({
                 'id': ampersound.id,
@@ -727,30 +730,9 @@ def create_app(config_name='default'):
 
         found_ampersounds = ampersounds_query.all()
         
-        # Get S3 config for URL generation
-        s3_client = app.config.get('S3_CLIENT')
-        s3_bucket = app.config.get('S3_BUCKET')
-        domain_name_images = app.config.get('DOMAIN_NAME_IMAGES')
-        s3_endpoint_url = app.config.get('S3_ENDPOINT_URL')
-        s3_region = app.config.get('S3_REGION', 'us-east-1')
-
         for sound in found_ampersounds:
             tag = f"&{sound.user.username}.{sound.name}"
-            file_url = None # Generate URL
-            if s3_client and s3_bucket:
-                s3_key = sound.file_path
-                try:
-                    if domain_name_images:
-                        file_url = f"{domain_name_images}/{s3_key}"
-                    elif s3_endpoint_url:
-                        file_url = f"{s3_endpoint_url}/{s3_bucket}/{s3_key}"
-                    else:
-                        if s3_region == 'auto':
-                            app.logger.warn(f"Cannot construct S3 URL for {s3_key} with 'auto' region for AWS S3.")
-                        else:
-                            file_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
-                except Exception as e:
-                    app.logger.error(f"Error generating URL for search result ampersound {sound.id}: {e}")
+            file_url = _get_ampersound_file_url(app.config, sound.file_path) # Generate URL
 
             results.append({
                 "id": sound.id, # Include ID for potential future use
