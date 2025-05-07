@@ -4,6 +4,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from models import db, User, Post, UserInterest, PostPrivacy, FriendRequest, FriendRequestStatus # Added FriendRequest
+from resources.post import FormattedContent # <<< IMPORT FormattedContent
 
 # --- Field Definitions for Marshaling ---
 # Re-use author_fields if defined elsewhere or define similar user fields
@@ -26,7 +27,7 @@ author_fields = {
 # <<< Use more complete post fields for profile view >>>
 post_fields_for_profile = {
     'id': fields.Integer,
-    'content': fields.String,
+    'content': FormattedContent(attribute=lambda x: x), # <<< NEW LINE - Use FormattedContent
     'image_url': fields.String,
     'timestamp': fields.DateTime(dt_format='iso8601'),
     'privacy': fields.String(attribute='privacy.name'), 
