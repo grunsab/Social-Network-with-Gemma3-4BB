@@ -4,6 +4,8 @@ from extensions import db # Added import from extensions
 from datetime import datetime, timezone
 import uuid # Add uuid for code generation
 import enum # Import enum for FriendRequestStatus and PostPrivacy
+from sqlalchemy import select, func # Added for comments_count
+from sqlalchemy.orm import column_property # Added for comments_count
 
 # Enum for Friend Request Status
 class FriendRequestStatus(enum.Enum):
@@ -183,38 +185,6 @@ class User(UserMixin, db.Model):
         """Returns a list of pending friend requests received by this user."""
         return FriendRequest.query.filter_by(receiver_id=self.id, status=FriendRequestStatus.PENDING).order_by(FriendRequest.timestamp.desc()).all()
 
-class Post(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
-    classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
-    comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
-    category_scores = db.relationship('PostCategoryScore', lazy=True, cascade='all, delete-orphan')
-    privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
-
-    def __repr__(self):
-        return f'<Post {self.content[:50]}...>'
-
-    def is_visible_to(self, user):
-        """Check if a post is visible to a given user based on privacy settings"""
-        # Post author can always see their own posts
-        if self.user_id == user.id:
-            return True
-            
-        # If public, anyone can see
-        if self.privacy == PostPrivacy.PUBLIC:
-            return True
-            
-        # If friends-only, check friendship
-        if self.privacy == PostPrivacy.FRIENDS:
-            author = User.query.get(self.user_id)
-            return author.is_friend(user)
-            
-        # Default fallback - shouldn't reach here with proper enum constraints
-        return False
-
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
@@ -246,6 +216,45 @@ class Comment(db.Model):
             if post_author and post_author.id == user.id:
                 return True
         
+        return False
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
+    classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
+    comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
+    category_scores = db.relationship('PostCategoryScore', lazy=True, cascade='all, delete-orphan')
+    privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
+
+    comments_count = column_property(
+        select(func.count(Comment.id))
+        .where(Comment.post_id == id)
+        .correlate_except(Comment)
+        .scalar_subquery()
+    )
+
+    def __repr__(self):
+        return f'<Post {self.content[:50]}...>'
+
+    def is_visible_to(self, user):
+        """Check if a post is visible to a given user based on privacy settings"""
+        # Post author can always see their own posts
+        if self.user_id == user.id:
+            return True
+            
+        # If public, anyone can see
+        if self.privacy == PostPrivacy.PUBLIC:
+            return True
+            
+        # If friends-only, check friendship
+        if self.privacy == PostPrivacy.FRIENDS:
+            author = User.query.get(self.user_id)
+            return author.is_friend(user)
+            
+        # Default fallback - shouldn't reach here with proper enum constraints
         return False
 
 class PostCategoryScore(db.Model):

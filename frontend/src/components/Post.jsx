@@ -141,6 +141,9 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   if (!post) return null; // Don't render if no post data
 
   const isAuthor = currentUser && currentUser.id === post.author?.id;
+  
+  // Debug comment count
+  console.log(`Post ${post.id} - comments_count from API:`, post.comments_count);
 
   // Fetch comments function
   const fetchComments = async () => {
@@ -310,7 +313,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
         <div className="post-actions">
             {/* Toggle Comments Button */}
             <button onClick={() => setShowComments(!showComments)} className="icon-button" title={showComments ? "Hide Comments" : "Show Comments"}>
-                <FaRegCommentDots /> <span className="post-action-label">{showComments ? 'Hide' : 'Comments'} ({comments.length > 0 ? comments.length : post.comment_count || 0})</span>
+                <FaRegCommentDots /> <span className="post-action-label">{showComments ? 'Hide' : 'Comments'} ({!showComments ? (post.comments_count || 0) : comments.length})</span>
             </button>
 
             {/* Delete Button - only for author */}

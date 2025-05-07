@@ -5,9 +5,9 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage # Import FileStorage for reqparse
 import uuid
 import os
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, undefer
 
-from models import db, User, Post, PostCategoryScore, UserInterest, PostPrivacy, FriendRequest, FriendRequestStatus
+from models import db, User, Post, PostCategoryScore, UserInterest, PostPrivacy, FriendRequest, FriendRequestStatus, Comment
 # Import the formatter function
 from utils import format_text_with_ampersounds 
 
@@ -50,7 +50,7 @@ post_fields = {
     'author': fields.Nested(author_fields), # Nested author data
     'classification_scores': fields.Raw(attribute='classification_scores'), # Keep as JSON object
     # Add comments count or other fields later if needed
-    # 'comments_count': fields.Integer(attribute=lambda x: len(x.comments)) # Example
+    'comments_count': fields.Integer # Use the column_property directly
 }
 
 post_list_fields = {
@@ -210,8 +210,9 @@ class PostListResource(Resource):
         # --- Query Building (adapted from app.py/index) ---
         # Base query - Eager load author and scores needed for filtering/display
         base_query = Post.query.options(
-            joinedload(Post.author), 
-            joinedload(Post.category_scores)
+            joinedload(Post.author),
+            joinedload(Post.category_scores),
+            undefer(Post.comments_count) # Explicitly load comments_count
         )
 
         # 1. Public Posts
@@ -278,7 +279,11 @@ class PostResource(Resource):
     def get(self, post_id):
         # Logic for fetching a single post by ID
         # Check permissions based on privacy and friendship
-        post = Post.query.get_or_404(post_id)
+        post = Post.query.options(
+            joinedload(Post.author), # Eager load author
+            joinedload(Post.category_scores), # Eager load category_scores
+            undefer(Post.comments_count) # Explicitly load comments_count
+        ).get_or_404(post_id)
 
         # Permission check (simplified example)
         is_author = post.user_id == current_user.id
@@ -307,7 +312,6 @@ class PostResource(Resource):
             PostCategoryScore.query.filter_by(post_id=post_to_delete.id).delete(synchronize_session='fetch') # Changed synchronize_session strategy
             
             # Delete associated comments (assuming Comment model has post_id)
-            from models import Comment # Import here or at top if not already
             Comment.query.filter_by(post_id=post_to_delete.id).delete(synchronize_session='fetch')
 
             db.session.delete(post_to_delete)

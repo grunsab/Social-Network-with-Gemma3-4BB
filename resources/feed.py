@@ -24,6 +24,7 @@ post_feed_fields = {
     'privacy': fields.String(attribute='privacy.name'), 
     'author': fields.Nested(author_fields),
     'classification_scores': fields.Raw(attribute='classification_scores'), 
+    'comments_count': fields.Integer,  # Added comment count to feed fields
     # Add relevance score if we decide to calculate and return it
     # 'relevance_score': fields.Float 
 }
@@ -83,7 +84,8 @@ class FeedResource(Resource):
             # Fetch posts for the current page
             posts_unfiltered = Post.query.options(
                 joinedload(Post.author),
-                joinedload(Post.category_scores) # Need scores for category blocking below
+                joinedload(Post.category_scores), # Need scores for category blocking below
+                undefer(Post.comments_count)  # Ensure comments_count is loaded
             ).filter(combined_filter).order_by(Post.timestamp.desc()).limit(per_page).offset(offset).all()
             print(f"DEBUG: User {current_user.id} - Fallback posts_unfiltered IDs: {[p.id for p in posts_unfiltered]}", file=sys.stderr)
 
@@ -155,7 +157,8 @@ class FeedResource(Resource):
                 posts_unfiltered = Post.query.filter(Post.id.in_(ordered_post_ids)).options(
                     joinedload(Post.author),
                     joinedload(Post.category_scores),
-                    undefer(Post.content)
+                    undefer(Post.content),
+                    undefer(Post.comments_count)  # Load comments_count for personalized posts
                 ).all()
                 # Re-order based on the relevance query result order
                 posts_map = {p.id: p for p in posts_unfiltered}
@@ -186,4 +189,4 @@ class FeedResource(Resource):
             'total_items': total_items, 
             'total_pages': total_pages,
             'message': message
-        } 
+        }
