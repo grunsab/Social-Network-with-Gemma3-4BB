@@ -274,7 +274,13 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
       
       {/* Post Content - Updated to use PlayableContentViewer */}
       {post.content && 
-        <div className="post-content">
+        <div 
+          className="post-content" 
+          onClick={(e) => {
+            console.log('[Post.jsx] Click detected on div.post-content. Event target:', e.target);
+            console.log('[Post.jsx] Event currentTarget:', e.currentTarget);
+          }}
+        >
             { /* Log the content being passed to PlayableContentViewer */ }
             { console.log("Post.jsx - Rendering post.content for PlayableContentViewer:", post.content) }
             <PlayableContentViewer htmlContent={post.content} />
