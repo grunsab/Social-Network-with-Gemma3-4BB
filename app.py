@@ -15,6 +15,7 @@ from openai import OpenAI
 import mimetypes
 from werkzeug.utils import secure_filename
 import re # Import regular expression module
+from flask_cors import CORS # Import CORS
 
 # Import extensions and models AFTER defining configurations
 from extensions import db, login_manager, migrate
@@ -267,6 +268,12 @@ def create_app(config_name='default'):
         # Load configuration from the selected class
         app.config.from_object(config[config_name])
         config[config_name].init_app(app) # Call static init_app if defined
+
+        # Initialize CORS
+        # Adjust origins and supports_credentials as needed for your setup.
+        # FRONTEND_URL should be in your .env file, e.g., FRONTEND_URL=http://localhost:5173
+        frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:5173') # Default if not set
+        CORS(app, supports_credentials=True, origins=[frontend_url])
 
         print(f"INFO: App created with config: {config_name}")
         print(f"INFO: Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")

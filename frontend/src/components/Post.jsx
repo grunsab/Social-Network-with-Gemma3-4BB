@@ -276,11 +276,36 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
       
       try {
           const response = await fetch(`/api/v1/comments/${commentId}`, {
-              method: 'DELETE'
+              method: 'DELETE',
+              credentials: 'include' // Added to ensure cookies (auth) are sent
           });
           if (!response.ok) {
-              const data = await response.json();
-              throw new Error(data.message || 'Failed to delete comment');
+              let errorMessage = 'Failed to delete comment';
+              // Check content type before assuming JSON for error response
+              if (response.headers.get("content-type")?.includes("application/json")) {
+                  try {
+                      const data = await response.json();
+                      errorMessage = data.message || errorMessage;
+                  } catch (e) {
+                      console.error("Could not parse error response as JSON for comment deletion:", e);
+                      // Keep default error message or use response status text if available
+                      if (response.statusText) errorMessage = response.statusText;
+                  }
+              } else {
+                  // Attempt to get text if not JSON, response might be plain text
+                  try {
+                      const textData = await response.text();
+                      if (textData) {
+                          errorMessage = textData;
+                      } else if (response.statusText) {
+                          errorMessage = response.statusText;
+                      }
+                  } catch (e) {
+                      console.error("Could not read error response as text for comment deletion:", e);
+                      if (response.statusText) errorMessage = response.statusText;
+                  }
+              }
+              throw new Error(errorMessage);
           }
           setComments(prevComments => prevComments.filter(comment => comment.id !== commentId)); // Remove from state
       } catch (error) {   
