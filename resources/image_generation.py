@@ -7,8 +7,9 @@ import uuid
 import mimetypes
 import io
 import base64
+from datetime import datetime, timezone
 
-from models import db, Post, User, PostCategoryScore
+from models import db, Post, User, PostCategoryScore, UserImageGenerationStats
 
 # --- Parser for image generation ---
 image_gen_parser = reqparse.RequestParser()
@@ -40,7 +41,14 @@ class ImageGenerationResource(Resource):
     def post(self):
         args = image_gen_parser.parse_args()
         prompt = args['prompt']
-        
+
+        # Rate limiting check
+        today = datetime.now(timezone.utc).date()
+        stats = UserImageGenerationStats.query.filter_by(user_id=current_user.id, generation_date=today).first()
+
+        if stats and stats.count >= 20:
+            abort(429, message="You have reached your daily limit of 20 image generations.")
+
         openai_api_key = current_app.config.get('OPENAI_API_KEY')
         openai_client = OpenAI(
                 api_key=openai_api_key,
@@ -135,6 +143,13 @@ class ImageGenerationResource(Resource):
                             score=float(score)
                         )
                         db.session.add(post_category_score)
+            
+            # Update generation stats
+            if stats:
+                stats.count += 1
+            else:
+                stats = UserImageGenerationStats(user_id=current_user.id, generation_date=today, count=1)
+                db.session.add(stats)
             
             db.session.commit()
 

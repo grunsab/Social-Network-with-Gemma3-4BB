@@ -4,7 +4,7 @@ from extensions import db # Added import from extensions
 from datetime import datetime, timezone
 import uuid # Add uuid for code generation
 import enum # Import enum for FriendRequestStatus and PostPrivacy
-from sqlalchemy import select, func # Added for comments_count
+from sqlalchemy import select, func, Date # Added for comments_count and UserImageGenerationStats
 from sqlalchemy.orm import column_property # Added for comments_count
 
 # Enum for Friend Request Status
@@ -78,6 +78,7 @@ class User(UserMixin, db.Model):
     # Relationships for invite tracking
     # User who invited this user
     inviter = db.relationship('User', remote_side=[id], backref='invited_users', foreign_keys=[invited_by_user_id])
+    image_generation_stats = db.relationship('UserImageGenerationStats', backref='user', lazy=True)
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -407,3 +408,15 @@ class Notification(db.Model):
     # Relationships
     user = db.relationship('User', foreign_keys=[user_id], backref='notifications_received')
     actor = db.relationship('User', foreign_keys=[actor_id], backref='notifications_sent')
+
+# New model for tracking daily image generations by user
+class UserImageGenerationStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    generation_date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    count = db.Column(db.Integer, default=0, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'generation_date', name='uq_user_generation_date'),)
+
+    def __repr__(self):
+        return f'<UserImageGenerationStats UserID: {self.user_id} Date: {self.generation_date} Count: {self.count}>'
