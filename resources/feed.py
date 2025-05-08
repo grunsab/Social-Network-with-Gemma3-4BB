@@ -172,6 +172,16 @@ class FeedResource(Resource):
             if not post_categories.intersection(blocked_categories):
                 filtered_posts.append(post)
 
+        # --- Reorder current user's own posts without comments to bottom ---
+        reordered_posts = []
+        own_posts_no_comments = []
+        for post in filtered_posts:
+            if post.user_id == current_user.id and post.comments_count == 0:
+                own_posts_no_comments.append(post)
+            else:
+                reordered_posts.append(post)
+        filtered_posts = reordered_posts + own_posts_no_comments
+
         # Calculate total pages based on total_items (which was counted *before* category filtering)
         total_pages = math.ceil(total_items / per_page) if total_items > 0 else 1
 
