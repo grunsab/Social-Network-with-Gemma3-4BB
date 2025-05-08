@@ -4,6 +4,7 @@ const PlayableContentViewer = ({ htmlContent }) => {
     const contentRef = useRef(null);
     const [activeAudio, setActiveAudio] = useState(null);
     const [error, setError] = useState(null);
+    const audioCacheRef = useRef(new Map());
 
     // Cleanup previous audio element if a new one starts playing or component unmounts
     useEffect(() => {
@@ -43,12 +44,24 @@ const PlayableContentViewer = ({ htmlContent }) => {
             }
             console.log(`[PlayableContentViewer] handleAmpersoundClick: Playing &${soundname} for @${username}`);
 
-            // If there's an active audio, stop it before playing a new one
-            if (activeAudio) {
-                console.log('[PlayableContentViewer] handleAmpersoundClick: Pausing existing audio.');
-                activeAudio.pause();
-                // setActiveAudio(null) will be called in the cleanup of the *other* useEffect
-                // or before setting a new one. This prevents premature cleanup if setting same audio again (though unlikely here)
+            const key = `${username}-${soundname}`;
+            // Play from cache if available
+            if (audioCacheRef.current.has(key)) {
+                const cachedAudio = audioCacheRef.current.get(key);
+                console.log('[PlayableContentViewer] handleAmpersoundClick: Playing cached audio:', cachedAudio);
+                if (activeAudio && activeAudio !== cachedAudio) {
+                    console.log('[PlayableContentViewer] handleAmpersoundClick: Pausing existing audio.');
+                    activeAudio.pause();
+                }
+                cachedAudio.currentTime = 0; // Reset playback to start
+                cachedAudio.play().catch(playError => {
+                    console.error("[PlayableContentViewer] handleAmpersoundClick: Error playing cached audio:", playError);
+                    setError(`Could not play sound: ${playError.message}. Browser autoplay policies might require user interaction for each sound.`);
+                    cachedAudio.pause();
+                    setActiveAudio(null); // Clear active audio if play fails
+                });
+                setActiveAudio(cachedAudio); // Store the cached audio element
+                return;
             }
 
             try {
@@ -64,6 +77,7 @@ const PlayableContentViewer = ({ htmlContent }) => {
                 if (data.url) {
                     const newAudio = new Audio(data.url);
                     console.log('[PlayableContentViewer] handleAmpersoundClick: Attempting to play audio:', data.url);
+                    audioCacheRef.current.set(key, newAudio); // Cache the audio element
                     newAudio.play().catch(playError => {
                         console.error("[PlayableContentViewer] handleAmpersoundClick: Error playing audio:", playError);
                         setError(`Could not play sound: ${playError.message}. Browser autoplay policies might require user interaction for each sound.`);
@@ -107,7 +121,7 @@ const PlayableContentViewer = ({ htmlContent }) => {
             // The other useEffect handles activeAudio cleanup on unmount or when activeAudio itself changes.
             // No need to call setActiveAudio(null) here directly as it might interfere with the other effect.
         };
-    }, [htmlContent]); // Rerun effect if htmlContent changes
+    }, [htmlContent, activeAudio]); // Rerun effect if htmlContent or activeAudio changes
 
     return (
         <div>
@@ -117,4 +131,4 @@ const PlayableContentViewer = ({ htmlContent }) => {
     );
 };
 
-export default PlayableContentViewer; 
+export default PlayableContentViewer;
