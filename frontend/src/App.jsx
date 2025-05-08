@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -18,13 +18,31 @@ import CategoryView from './components/CategoryView'; // Import CategoryView
 import ManageInvites from './components/ManageInvites'; // Import ManageInvites
 import FriendRequests from './components/FriendRequests'; // Import FriendRequests
 import PopularAmpersoundsPage from './components/PopularAmpersoundsPage'; // Import new page
+import Notifications from './components/Notifications'; // Import Notifications
+import SinglePostPage from './components/SinglePostPage'; // Import SinglePostPage
 import './App.css';
 import './hooks/Autocomplete.css'; // Import autocomplete styles
 import Spinner from './components/Spinner'; // Import Spinner
 
 function App() {
   const { currentUser, loading, logout } = useAuth(); // Get user and logout
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isNavOpen, setIsNavOpen] = useState(false); // State for mobile nav
+
+  // Fetch unread notifications count when user logs in
+  useEffect(() => {
+    async function fetchUnread() {
+      try {
+        const resp = await fetch('/api/v1/notifications/unread_count', { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setUnreadCount(data.unread_count || 0);
+      } catch (err) {
+        console.error('Failed to fetch unread count', err);
+      }
+    }
+    if (currentUser) fetchUnread();
+  }, [currentUser]);
 
   // Handle logout directly in nav for simplicity here
   const handleLogout = async () => {
@@ -76,6 +94,15 @@ function App() {
                 <NavLink to="/friend-requests" className={({ isActive }) => isActive ? "active" : ""}>Friend Requests</NavLink>
               </li>
               <li>
+                <NavLink to="/notifications" className={({ isActive }) => isActive ? "active" : ""}>
+                  Notifications{unreadCount > 0 && (
+                    <span style={{ backgroundColor: 'red', color: '#fff', borderRadius: '50%', padding: '0.2rem 0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem' }}>
+                      {unreadCount}
+                    </span>
+                  )}
+                </NavLink>
+              </li>
+              <li>
                 <button onClick={handleLogout} className="logout-button">
                   Logout ({currentUser.username})
                 </button>
@@ -108,6 +135,8 @@ function App() {
              <Route path="/category/:categoryName" element={<CategoryView />} />
              <Route path="/manage-invites" element={<ManageInvites />} />
              <Route path="/friend-requests" element={<FriendRequests />} />
+             <Route path="/notifications" element={<Notifications />} />
+             <Route path="/posts/:postId" element={<SinglePostPage />} />
           </Route>
           
            {/* Optional: Catch-all route for 404 */}

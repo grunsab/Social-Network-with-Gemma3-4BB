@@ -67,14 +67,12 @@ class FeedResource(Resource):
             # --- Fallback: Recent Posts (If no interests) ---
             message = "Showing recent posts. Explore more to personalize your feed!"
             print(f"DEBUG: User {current_user.id} - Taking FEED FALLBACK path", file=sys.stderr)
-            combined_filter = and_(
-                Post.user_id != current_user.id,
-                or_(
-                    Post.privacy == PostPrivacy.PUBLIC,
-                    and_(
-                        Post.privacy == PostPrivacy.FRIENDS,
-                        Post.user_id.in_(friend_ids)
-                    )
+            combined_filter = or_(
+                Post.user_id == current_user.id,
+                Post.privacy == PostPrivacy.PUBLIC,
+                and_(
+                    Post.privacy == PostPrivacy.FRIENDS,
+                    Post.user_id.in_(friend_ids)
                 )
             )
             # Count total items matching the filter (before category blocking)
@@ -113,14 +111,12 @@ class FeedResource(Resource):
             ).outerjoin(
                 user_interest_subq, PostCategoryScore.category == user_interest_subq.c.category
             ).filter(
-                and_(
-                    Post.user_id != current_user.id,
-                    or_(
-                        Post.privacy == PostPrivacy.PUBLIC,
-                        and_(
-                            Post.privacy == PostPrivacy.FRIENDS,
-                            Post.user_id.in_(friend_ids)
-                        )
+                or_(
+                    Post.user_id == current_user.id,
+                    Post.privacy == PostPrivacy.PUBLIC,
+                    and_(
+                        Post.privacy == PostPrivacy.FRIENDS,
+                        Post.user_id.in_(friend_ids)
                     )
                 )
             ).group_by(Post.id, Post.timestamp)
@@ -133,14 +129,12 @@ class FeedResource(Resource):
 
             # Get total count for pagination
             # Let's recalculate total_items based on visibility filter only for pagination accuracy.
-            visibility_filter_for_count = and_(
-                Post.user_id != current_user.id,
-                or_(
-                    Post.privacy == PostPrivacy.PUBLIC,
-                    and_(
-                        Post.privacy == PostPrivacy.FRIENDS,
-                        Post.user_id.in_(friend_ids)
-                    )
+            visibility_filter_for_count = or_(
+                Post.user_id == current_user.id,
+                Post.privacy == PostPrivacy.PUBLIC,
+                and_(
+                    Post.privacy == PostPrivacy.FRIENDS,
+                    Post.user_id.in_(friend_ids)
                 )
             )
             total_items = db.session.query(func.count(Post.id)).filter(visibility_filter_for_count).scalar()

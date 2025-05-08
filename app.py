@@ -32,6 +32,7 @@ from resources.feed import FeedResource
 from resources.category import CategoryResource
 from resources.invite import InviteResource
 from resources.report import ReportResource
+from resources.notification import NotificationListResource, NotificationResource, UnreadCountResource
 
 # Load environment variables early
 load_dotenv()
@@ -325,6 +326,9 @@ def create_app(config_name='default'):
         api.add_resource(CategoryResource, '/api/v1/categories/<string:category_name>/posts')
         api.add_resource(InviteResource, '/api/v1/invites', '/api/v1/invites/<string:code>')
         api.add_resource(ReportResource, '/api/v1/reports')
+        api.add_resource(NotificationListResource, '/api/v1/notifications')
+        api.add_resource(NotificationResource, '/api/v1/notifications/<int:notif_id>')
+        api.add_resource(UnreadCountResource, '/api/v1/notifications/unread_count')
 
         # --- Manually add routes for MyProfileResource --- 
         # Instantiate the resource once (though it's stateless here)

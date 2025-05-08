@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restful import Resource, reqparse, fields, marshal_with
 from flask_login import current_user, login_required
 
-from models import db, Post, Comment, User, PostPrivacy # Import necessary models
+from models import db, Post, Comment, User, PostPrivacy, Notification # Import Notification
 # Import the formatter function
 from utils import format_text_with_ampersounds 
 
@@ -65,6 +65,22 @@ class CommentListResource(Resource):
         try:
             db.session.add(new_comment)
             db.session.commit()
+            # Create notifications: notify post author and previous commenters
+            try:
+                # Notify post author if commenter is not the author
+                if post.user_id != current_user.id:
+                    notif = Notification(user_id=post.user_id, actor_id=current_user.id, post_id=post_id, comment_id=new_comment.id)
+                    db.session.add(notif)
+                # Notify other previous commenters
+                prev_user_ids = {c.user_id for c in Comment.query.filter_by(post_id=post_id).all()}
+                prev_user_ids.discard(current_user.id)
+                prev_user_ids.discard(post.user_id)
+                for uid in prev_user_ids:
+                    notif = Notification(user_id=uid, actor_id=current_user.id, post_id=post_id, comment_id=new_comment.id)
+                    db.session.add(notif)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
             return new_comment, 201 # Return created comment with 201 status
         except Exception as e:
             db.session.rollback()
@@ -88,4 +104,4 @@ class CommentResource(Resource):
         except Exception as e:
             db.session.rollback()
             print(f"Error deleting comment: {e}")
-            return {'message': 'Failed to delete comment'}, 500 
+            return {'message': 'Failed to delete comment'}, 500

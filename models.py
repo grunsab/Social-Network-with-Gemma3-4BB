@@ -362,4 +362,23 @@ class Report(db.Model):
     )
 
     def __repr__(self):
-        return f'<Report {self.id} by User {self.reporter_id} on {self.content_type.value} {self.content_id}>' 
+        return f'<Report {self.id} by User {self.reporter_id} on {self.content_type.value} {self.content_id}>'
+
+# Enum for Notification types
+class NotificationType(enum.Enum):
+    COMMENT = 'comment'
+
+# Notification model
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    notification_type = db.Column(db.Enum(NotificationType), default=NotificationType.COMMENT, nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', foreign_keys=[user_id], backref='notifications_received')
+    actor = db.relationship('User', foreign_keys=[actor_id], backref='notifications_sent')
