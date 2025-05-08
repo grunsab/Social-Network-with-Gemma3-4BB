@@ -36,6 +36,7 @@ from resources.report import ReportResource, ReportListResource, AdminReportList
 from resources.notification import NotificationListResource, NotificationResource, UnreadCountResource
 from resources.image_generation import ImageGenerationResource # Added import
 from resources.ampersound import AmpersoundListResource, AmpersoundResource, MyAmpersoundsResource, AmpersoundSearchResource # Added Ampersound resources
+from resources.admin import AdminAmpersoundApprovalList, AdminAmpersoundApprovalAction # Added Admin Ampersound resources
 from utils import generate_s3_file_url # Import the utility function
 
 # Load environment variables early
@@ -348,6 +349,10 @@ def create_app(config_name='default'):
         api.add_resource(AmpersoundResource, '/api/v1/ampersounds/<int:sound_id>', '/ampersounds/<string:username>/<string:sound_name>') # GET, DELETE by id; GET by username/soundname
         api.add_resource(MyAmpersoundsResource, '/api/v1/ampersounds/my_sounds')
         api.add_resource(AmpersoundSearchResource, '/api/v1/ampersounds/search')
+
+        # Add Admin Ampersound Approval Resources
+        api.add_resource(AdminAmpersoundApprovalList, '/api/v1/admin/ampersounds/pending')
+        api.add_resource(AdminAmpersoundApprovalAction, '/api/v1/admin/ampersounds/<int:ampersound_id>/action')
 
 
         # --- Manually add routes for MyProfileResource --- 

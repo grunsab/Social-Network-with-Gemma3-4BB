@@ -1,4 +1,3 @@
-\
 import uuid
 import mimetypes
 from flask import request, jsonify, current_app
@@ -8,7 +7,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import joinedload
 
-from models import db, User, Ampersound
+from models import db, User, Ampersound, AmpersoundStatus, UserType
 from utils import generate_s3_file_url
 
 class AmpersoundListResource(Resource):
@@ -70,7 +69,13 @@ class AmpersoundListResource(Resource):
                 )
                 db.session.add(ampersound)
                 db.session.commit()
-                return {"message": "Ampersound created successfully!", "name": clean_name, "url": file_url, "ampersound_id": ampersound.id}, 201
+                return {
+                    "message": "Ampersound created successfully! It is pending approval.", 
+                    "name": clean_name, 
+                    "url": file_url, 
+                    "ampersound_id": ampersound.id,
+                    "status": ampersound.status.value
+                }, 201
             except Exception as e:
                 current_app.logger.error(f"Error uploading ampersound to S3: {e}")
                 return {"message": "Error uploading file to S3."}, 500
@@ -87,17 +92,26 @@ class AmpersoundListResource(Resource):
             .options(joinedload(Ampersound.user))
         )
 
-        if current_user.is_authenticated:
+        if current_user.is_authenticated and current_user.user_type == UserType.ADMIN:
+            pass
+        elif current_user.is_authenticated:
+            owner_condition = (Ampersound.user_id == current_user.id)
             friend_ids = current_user.get_friend_ids()
-            base_query = base_query.filter(
-                or_(
-                    Ampersound.privacy == 'public',
-                    and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
-                    Ampersound.user_id == current_user.id
-                )
+            
+            approved_public_condition = and_(
+                Ampersound.status == AmpersoundStatus.APPROVED, 
+                Ampersound.privacy == 'public'
             )
+            approved_friends_condition = and_(
+                Ampersound.status == AmpersoundStatus.APPROVED, 
+                Ampersound.privacy == 'friends',
+                Ampersound.user_id.in_(friend_ids) 
+            )
+            base_query = base_query.filter(or_(owner_condition, approved_public_condition, approved_friends_condition))
         else:
-            base_query = base_query.filter(Ampersound.privacy == 'public')
+            base_query = base_query.filter(
+                and_(Ampersound.status == AmpersoundStatus.APPROVED, Ampersound.privacy == 'public')
+            )
 
         all_ampersounds = (
             base_query
@@ -119,7 +133,8 @@ class AmpersoundListResource(Resource):
                 'url': file_url,
                 'timestamp': ampersound.timestamp.isoformat(),
                 'play_count': ampersound.play_count,
-                'privacy': ampersound.privacy
+                'privacy': ampersound.privacy,
+                'status': ampersound.status.value
             })
         return results, 200
 
@@ -139,22 +154,22 @@ class AmpersoundResource(Resource):
         if not ampersound:
             return {"message": "Ampersound not found"}, 404
 
-        can_view = False
-        if ampersound.privacy == 'public':
-            can_view = True
-        elif ampersound.privacy == 'friends':
-            if current_user.is_authenticated and (ampersound.user_id == current_user.id or current_user.is_friend(ampersound.user)):
-                can_view = True
-        
-        if not can_view:
+        if not ampersound.is_visible_to(current_user): 
             return {"message": "You do not have permission to view this Ampersound"}, 403
 
-        try:
-            ampersound.play_count = (Ampersound.play_count or 0) + 1
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error incrementing play_count for ampersound {ampersound.id}: {e}")
+        can_play_and_increment = False
+        if ampersound.status == AmpersoundStatus.APPROVED:
+            can_play_and_increment = True
+        elif current_user.is_authenticated and ampersound.user_id == current_user.id:
+            can_play_and_increment = True
+        
+        if can_play_and_increment:
+            try:
+                ampersound.play_count = (Ampersound.play_count or 0) + 1
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Error incrementing play_count for ampersound {ampersound.id}: {e}")
 
         file_url = generate_s3_file_url(current_app.config, ampersound.file_path)
         if not file_url:
@@ -167,7 +182,8 @@ class AmpersoundResource(Resource):
             "url": file_url, 
             "user": ampersound.user.username, 
             "play_count": ampersound.play_count,
-            "privacy": ampersound.privacy
+            "privacy": ampersound.privacy,
+            "status": ampersound.status.value
         }, 200
 
     @login_required
@@ -177,7 +193,7 @@ class AmpersoundResource(Resource):
         if not ampersound:
             return {"message": "Ampersound not found"}, 404
 
-        if ampersound.user_id != current_user.id:
+        if not (current_user.user_type == UserType.ADMIN or ampersound.user_id == current_user.id):
             return {"message": "You do not have permission to delete this Ampersound"}, 403
 
         s3_client = current_app.config.get('S3_CLIENT')
@@ -215,7 +231,8 @@ class MyAmpersoundsResource(Resource):
                 'file_path': ampersound.file_path,
                 'url': file_url,
                 'timestamp': ampersound.timestamp.isoformat(),
-                'privacy': ampersound.privacy
+                'privacy': ampersound.privacy,
+                'status': ampersound.status.value
             })
         return results, 200
 
@@ -228,7 +245,6 @@ class AmpersoundSearchResource(Resource):
         if not query_term:
             return [], 200 
 
-        results = []
         base_query = Ampersound.query.join(User, User.id == Ampersound.user_id)
 
         if '.' in query_term:
@@ -245,17 +261,26 @@ class AmpersoundSearchResource(Resource):
             soundname_pattern = f"{query_term}%"
             base_query = base_query.filter(func.lower(Ampersound.name).ilike(soundname_pattern))
 
-        if current_user.is_authenticated:
+        if current_user.is_authenticated and current_user.user_type == UserType.ADMIN:
+            pass
+        elif current_user.is_authenticated:
+            owner_condition = (Ampersound.user_id == current_user.id)
             friend_ids = current_user.get_friend_ids()
-            base_query = base_query.filter(
-                or_(
-                    Ampersound.privacy == 'public',
-                    and_(Ampersound.privacy == 'friends', Ampersound.user_id.in_(friend_ids)),
-                    Ampersound.user_id == current_user.id
-                )
+            
+            approved_public_condition = and_(
+                Ampersound.status == AmpersoundStatus.APPROVED, 
+                Ampersound.privacy == 'public'
             )
+            approved_friends_condition = and_(
+                Ampersound.status == AmpersoundStatus.APPROVED, 
+                Ampersound.privacy == 'friends',
+                Ampersound.user_id.in_(friend_ids)
+            )
+            base_query = base_query.filter(or_(owner_condition, approved_public_condition, approved_friends_condition))
         else:
-            base_query = base_query.filter(Ampersound.privacy == 'public')
+            base_query = base_query.filter(
+                and_(Ampersound.status == AmpersoundStatus.APPROVED, Ampersound.privacy == 'public')
+            )
 
         ampersounds_query = (
             base_query
@@ -265,6 +290,7 @@ class AmpersoundSearchResource(Resource):
         )
         found_ampersounds = ampersounds_query.all()
         
+        results = []
         for sound in found_ampersounds:
             tag = f"&{sound.user.username}.{sound.name}"
             file_url = generate_s3_file_url(current_app.config, sound.file_path)
@@ -277,6 +303,7 @@ class AmpersoundSearchResource(Resource):
                 },
                 "name": sound.name,
                 "url": file_url,
-                "privacy": sound.privacy
+                "privacy": sound.privacy,
+                "status": sound.status.value
             })
         return results, 200

@@ -36,6 +36,12 @@ class ReportStatus(enum.Enum):
     RESOLVED_MANUAL = 'resolved_manual' # For other admin actions
     DISMISSED = 'dismissed'
 
+# Enum for Ampersound Status
+class AmpersoundStatus(enum.Enum):
+    PENDING_APPROVAL = 'pending_approval'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+
 # Enum for Comment Visibility
 class CommentVisibility(enum.Enum):
     PUBLIC = 'public'
@@ -329,31 +335,41 @@ class Ampersound(db.Model):
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     play_count = db.Column(db.Integer, default=0, nullable=False, index=True) # New field for tracking plays
     privacy = db.Column(db.String(50), default='public', nullable=False) # 'public' or 'friends'
+    status = db.Column(db.Enum(AmpersoundStatus), default=AmpersoundStatus.PENDING_APPROVAL, nullable=False) # New status field
 
     # Define a unique constraint for user_id and name
     __table_args__ = (
         db.UniqueConstraint('user_id', 'name', name='uq_user_ampersound_name'),
-        # db.Index('ix_ampersound_play_count', 'play_count') # Index can be created here or via @index decorator on column
     )
 
     # Relationship to User
     user = db.relationship('User', backref=db.backref('ampersounds', lazy=True))
 
     def __repr__(self):
-        return f'<Ampersound {self.id} @{self.user.username}&{self.name} (Plays: {self.play_count}) Privacy: {self.privacy}>'
+        return f'<Ampersound {self.id} @{self.user.username}&{self.name} (Plays: {self.play_count}) Privacy: {self.privacy} Status: {self.status.value}>'
 
     def is_visible_to(self, user):
         """Check if an ampersound is visible to a given user."""
-        # Ampersound owner can always see their own ampersounds
-        if self.user_id == user.id:
+        # Ampersound owner can always see their own ampersounds, regardless of status
+        if user and self.user_id == user.id:
             return True
-        
-        # If public, anyone can see
-        if self.privacy == 'public': # Uses string 'public'
+
+        # Admins can see all ampersounds
+        if user and user.user_type == UserType.ADMIN:
+            return True
+
+        # If ampersound is not approved, only owner (checked above) or admin (checked above) can see it.
+        if self.status != AmpersoundStatus.APPROVED:
+            return False
+
+        # If approved and public, anyone can see
+        if self.privacy == 'public':
             return True
             
-        # If friends-only, check friendship
-        if self.privacy == 'friends': # Uses string 'friends'
+        # If approved and friends-only, check friendship (user must be logged in)
+        if self.privacy == 'friends':
+            if not user: # Anonymous users cannot see friends-only content
+                return False
             amp_author = User.query.get(self.user_id)
             if not amp_author: # Should not happen if data is consistent
                 return False
