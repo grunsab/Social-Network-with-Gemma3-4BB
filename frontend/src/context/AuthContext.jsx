@@ -7,12 +7,27 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true); // Start loading true
+  const [unreadCount, setUnreadCount] = useState(0); // Add unreadCount state
+
+  // Function to fetch unread notification count
+  const fetchUnreadCount = async () => {
+    try {
+      const resp = await fetch('/api/v1/notifications/unread_count', { credentials: 'include' });
+      if (resp.ok) {
+        const data = await resp.json();
+        setUnreadCount(data.unread_count || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch unread count in AuthContext', err);
+      // Potentially set to 0 or handle error appropriately
+      setUnreadCount(0);
+    }
+  };
 
   // Check for existing session on initial load
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // Use the existing endpoint that requires login and returns user data
         const response = await fetch('/api/v1/profiles/me', { 
             method: 'GET', // Explicit GET is good practice
             credentials: 'include' // *** Add this to send cookies ***
@@ -23,26 +38,27 @@ export const AuthProvider = ({ children }) => {
           // Check if user data is nested under 'user' key, otherwise assume it's top-level
           const userData = data.user || data;
           setCurrentUser(userData);
+          fetchUnreadCount(); // Fetch count after session check
         } else {
           // If status is 401 or other error, assume not logged in
           setCurrentUser(null);
+          setUnreadCount(0); // Reset count if not logged in
         }
       } catch (error) {
         console.error("Session check failed:", error);
         setCurrentUser(null);
+        setUnreadCount(0); // Reset count on error
       } finally {
         setLoading(false); // Set loading false after check completes
       }
     };
     checkSession();
-    
-    // Remove the previous assumption
-    // setLoading(false); 
   }, []);
 
   // Function to handle login - expects user data from API
   const login = (userData) => {
     setCurrentUser(userData);
+    fetchUnreadCount(); // Fetch count on login
     // TODO: Maybe store token or session info if applicable
   };
 
@@ -60,6 +76,7 @@ export const AuthProvider = ({ children }) => {
        console.error("Logout API call failed:", error);
     }
     setCurrentUser(null);
+    setUnreadCount(0); // Reset count on logout
     // TODO: Clear any stored token/session info
   };
 
@@ -92,6 +109,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     refreshUserProfile, // Expose the refresh function
+    unreadCount, // Expose unreadCount
+    setUnreadCount, // Expose setUnreadCount
   };
 
   return (
