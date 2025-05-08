@@ -99,14 +99,30 @@ class FeedResource(Resource):
         E_WEIGHT = current_app.config.get('FEED_ENGAGEMENT_WEIGHT', 0.15) # Engagement weight
         S_PENALTY_WEIGHT = current_app.config.get('FEED_SELF_POST_PENALTY_WEIGHT', 0.65) # Penalty for self-posts
 
+        # Define normalization constants
+        # These K-values determine the point at which the raw score component yields a normalized score of 0.5
+        # e.g., if K_COMMENTS is 10, 10 comments will give a normalized score of 10 / (10 + 10) = 0.5
+        K_RELEVANCE = current_app.config.get('FEED_K_RELEVANCE', 10.0)
+        K_COMMENTS = current_app.config.get('FEED_K_COMMENTS', 10.0)
+        K_LIKES = current_app.config.get('FEED_K_LIKES', 20.0)
+
         # Build feed scoring query
         feed_query = db.session.query(
             Post.id.label('post_id'),
             (
-                R_WEIGHT * func.coalesce(func.sum(PostCategoryScore.score * weight_subq.c.weight), 0)
-                + P_WEIGHT * func.coalesce(Post.comments_count, 0) # Popularity based on comments
-                + D_WEIGHT * (1 / (1 + (func.extract('epoch', func.now() - Post.timestamp) / 3600))) # Recency
-                + E_WEIGHT * func.coalesce(Post.likes_count, 0) # Engagement based on likes
+                R_WEIGHT * (
+                    func.coalesce(func.sum(PostCategoryScore.score * weight_subq.c.weight), 0) /
+                    (func.coalesce(func.sum(PostCategoryScore.score * weight_subq.c.weight), 0) + K_RELEVANCE)
+                )
+                + P_WEIGHT * (
+                    func.coalesce(Post.comments_count, 0) /
+                    (func.coalesce(Post.comments_count, 0) + K_COMMENTS)
+                ) # Popularity based on comments
+                + D_WEIGHT * (1.0 / (1.0 + (func.extract('epoch', func.now() - Post.timestamp) / 3600.0))) # Recency (already 0-1)
+                + E_WEIGHT * (
+                    func.coalesce(Post.likes_count, 0) /
+                    (func.coalesce(Post.likes_count, 0) + K_LIKES)
+                ) # Engagement based on likes
                 - case((Post.user_id == current_user.id, S_PENALTY_WEIGHT), else_=0) # Penalty for own posts
             ).label('feed_score'),
             Post.timestamp.label('timestamp')
