@@ -7,6 +7,7 @@ import math # For ceiling division in pagination calculation
 import sys # Added for print statements
 
 from models import db, User, Post, UserInterest, PostCategoryScore, PostPrivacy, FriendRequest, FriendRequestStatus
+from resources.post import FormattedContent  # Import formatted content field for ampersounds
 
 # --- Field definitions for Marshaling ---
 # Attempt to re-use or define fields consistently
@@ -18,7 +19,7 @@ author_fields = {
 
 post_feed_fields = {
     'id': fields.Integer,
-    'content': fields.String,
+    'content': FormattedContent(attribute=lambda x: x),  # Use formatted content with ampersound spans
     'image_url': fields.String,
     'timestamp': fields.DateTime(dt_format='iso8601'),
     'privacy': fields.String(attribute='privacy.name'), 
