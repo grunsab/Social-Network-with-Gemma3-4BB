@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import OpenAI, APIError
 from flask import current_app, jsonify, request
 from flask_restful import Resource, reqparse, abort
 from flask_login import current_user, login_required
@@ -8,7 +8,7 @@ import mimetypes
 import io
 import base64
 
-from models import db, Post, User
+from models import db, Post, User, PostCategoryScore
 
 # --- Parser for image generation ---
 image_gen_parser = reqparse.RequestParser()
@@ -79,6 +79,9 @@ class ImageGenerationResource(Resource):
             # 3. Upload to R2
             s3_filename = f"generated_images/{current_user.id}/{uuid.uuid4()}{extension}"
             
+            # Reset stream position for upload_fileobj after reading for classification
+            image_data.seek(0) 
+
             s3_client.upload_fileobj(
                 image_data,
                 s3_bucket,
@@ -96,18 +99,48 @@ class ImageGenerationResource(Resource):
                     current_app.logger.error(f"Failed to cleanup S3 object {s3_filename}: {s3_del_e}")
                 abort(500, message="Failed to construct final image URL after uploading to R2.")
 
-            # 5. Create a new post with the R2 image URL
+            # 5. Classify the image using Gemma
+            gemma_classifier = current_app.config.get('GEMMA_CLASSIFIER')
+            image_classification_scores = {}
+            if gemma_classifier:
+                # Ensure image_data_bytes is available. If image_data is BytesIO, get its value.
+                img_bytes_for_classification = image_data_bytes
+                try:
+                    image_classification_scores = gemma_classifier.classify_image(img_bytes_for_classification)
+                    current_app.logger.info(f"Image classification successful for generated image: {image_classification_scores}")
+                except Exception as e:
+                    current_app.logger.error(f"Error during image classification for generated image: {e}")
+                    # Decide if you want to abort or proceed without classification
+                    # For now, proceeding without classification scores if error occurs
+            else:
+                current_app.logger.warning("Gemma classifier not found in app config. Skipping image classification.")
+
+            # 6. Create a new post with the R2 image URL and classification scores
             new_post = Post(
                 content=f"Generated image with prompt: {prompt}",
                 user_id=current_user.id,
-                image_url=final_image_url 
+                image_url=final_image_url,
+                classification_scores=image_classification_scores
             )
             db.session.add(new_post)
+            db.session.flush() # Flush to get new_post.id for PostCategoryScore
+
+            # 7. Populate PostCategoryScore from classification results
+            if image_classification_scores:
+                for category, score in image_classification_scores.items():
+                    if isinstance(score, (float, int)) and score > 0:
+                        post_category_score = PostCategoryScore(
+                            post_id=new_post.id,
+                            category=category,
+                            score=float(score)
+                        )
+                        db.session.add(post_category_score)
+            
             db.session.commit()
 
-            return {'message': 'Image generated via OpenAI, uploaded to R2, and post created successfully', 'post_id': new_post.id, 'image_url': final_image_url}, 201
+            return {'message': 'Image generated, classified, uploaded to R2, and post created successfully', 'post_id': new_post.id, 'image_url': final_image_url, 'classification': image_classification_scores}, 201
 
-        except openai.APIError as e:
+        except APIError as e:
             current_app.logger.error(f"OpenAI API error: {e}")
             abort(e.http_status or 500, message=f"OpenAI API error: {str(e)}")
         except Exception as e:
