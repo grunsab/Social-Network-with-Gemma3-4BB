@@ -97,7 +97,7 @@ class FeedResource(Resource):
         P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.15)
         D_WEIGHT = current_app.config.get('FEED_RECENCY_WEIGHT', 0.2)
         E_WEIGHT = current_app.config.get('FEED_ENGAGEMENT_WEIGHT', 0.15) # Engagement weight
-        S_PENALTY_WEIGHT = current_app.config.get('FEED_SELF_POST_PENALTY_WEIGHT', 0.3) # Penalty for self-posts
+        S_PENALTY_WEIGHT = current_app.config.get('FEED_SELF_POST_PENALTY_WEIGHT', 0.5) # Penalty for self-posts
 
         # Build feed scoring query
         feed_query = db.session.query(
