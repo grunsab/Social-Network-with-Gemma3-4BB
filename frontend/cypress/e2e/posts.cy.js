@@ -171,7 +171,7 @@ describe('Post Management', () => {
     // Check for the client-side error message
     cy.get('.error-message')
       .should('be.visible')
-      .and('contain.text', 'Image file is too large (max 2MB).');
+      .and('contain.text', 'Image file is too large (max 3MB).');
 
     // Check that the file input value has been cleared by the component
     cy.get('#post-image-input').should('have.value', ''); 

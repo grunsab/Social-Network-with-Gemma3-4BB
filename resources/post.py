@@ -92,8 +92,8 @@ class PostListResource(Resource):
                 image_file.seek(0, os.SEEK_END)
                 file_size = image_file.tell()
                 image_file.seek(0)
-                if file_size > 2 * 1024 * 1024:
-                    return {'message': 'Image file too large (max 2MB)'}, 413 # Payload Too Large
+                if file_size > 3 * 1024 * 1024:
+                    return {'message': 'Image file too large (max 3MB)'}, 413 # Payload Too Large
 
                 file_extension = os.path.splitext(image_file.filename)[1]
                 unique_filename = f"images/{uuid.uuid4()}{file_extension}"

@@ -69,9 +69,9 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
 
   const handleImageChange = (event) => {
     if (event.target.files && event.target.files[0]) {
-        // Check file size (e.g., < 10MB)
-        if (event.target.files[0].size > 2 * 1024 * 1024) {
-            setError('Image file is too large (max 2MB).');
+        // Check file size (e.g., < 3MB)
+        if (event.target.files[0].size > 3 * 1024 * 1024) {
+            setError('Image file is too large (max 3MB).');
             setImageFile(null);
             event.target.value = null; // Clear the input
         } else {
