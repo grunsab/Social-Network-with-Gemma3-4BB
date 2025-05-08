@@ -2,7 +2,7 @@ from flask import current_app, jsonify
 from flask_restful import Resource, fields, marshal_with, reqparse, abort
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload, undefer
-from sqlalchemy import desc, func, union_all, or_, and_ # Added or_ and and_
+from sqlalchemy import desc, func, union_all, or_, and_, case # Added case
 import math # For ceiling division in pagination calculation
 import sys # Added for print statements
 
@@ -97,6 +97,7 @@ class FeedResource(Resource):
         P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.15)
         D_WEIGHT = current_app.config.get('FEED_RECENCY_WEIGHT', 0.2)
         E_WEIGHT = current_app.config.get('FEED_ENGAGEMENT_WEIGHT', 0.15) # Engagement weight
+        S_PENALTY_WEIGHT = current_app.config.get('FEED_SELF_POST_PENALTY_WEIGHT', 0.3) # Penalty for self-posts
 
         # Build feed scoring query
         feed_query = db.session.query(
@@ -106,6 +107,7 @@ class FeedResource(Resource):
                 + P_WEIGHT * func.coalesce(Post.comments_count, 0) # Popularity based on comments
                 + D_WEIGHT * (1 / (1 + (func.extract('epoch', func.now() - Post.timestamp) / 3600))) # Recency
                 + E_WEIGHT * func.coalesce(Post.likes_count, 0) # Engagement based on likes
+                - case((Post.user_id == current_user.id, S_PENALTY_WEIGHT), else_=0) # Penalty for own posts
             ).label('feed_score'),
             Post.timestamp.label('timestamp')
         ).select_from(Post).outerjoin(
