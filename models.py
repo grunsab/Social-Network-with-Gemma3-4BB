@@ -192,6 +192,8 @@ class Comment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
     visibility = db.Column(db.Enum(CommentVisibility), default=CommentVisibility.PUBLIC, nullable=False) # Added visibility
+    # Add relationship to Notification with cascade delete
+    notifications = db.relationship('Notification', backref='comment', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Comment {self.content[:30]}...>'
@@ -398,7 +400,7 @@ class Notification(db.Model):
     actor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     notification_type = db.Column(db.Enum(NotificationType), default=NotificationType.COMMENT, nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
-    comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=False)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comment.id', ondelete='CASCADE'), nullable=False) # Added ondelete='CASCADE'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
 
