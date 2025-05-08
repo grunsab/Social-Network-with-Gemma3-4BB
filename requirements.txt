@@ -5,6 +5,7 @@ Werkzeug
 bcrypt
 openai
 python-dotenv
+requests # Added for DeepInfra API calls
 # deepinfra
 Flask-Migrate
 gunicorn

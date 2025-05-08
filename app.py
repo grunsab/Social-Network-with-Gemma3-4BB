@@ -34,6 +34,7 @@ from resources.category import CategoryResource
 from resources.invite import InviteResource
 from resources.report import ReportResource, ReportListResource, AdminReportListResource, AdminReportActionResource
 from resources.notification import NotificationListResource, NotificationResource, UnreadCountResource
+from resources.image_generation import ImageGenerationResource # Added import
 
 # Load environment variables early
 load_dotenv()
@@ -62,6 +63,7 @@ class Config:
     FRONTEND_URL = os.environ.get('FRONTEND_URL', '')
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     DEEPINFRA_API_BASE = "https://api.deepinfra.com/v1/openai" # Centralize this
+    DEEPINFRA_API_KEY = os.environ.get('DEEPINFRA_API_KEY') # Added DeepInfra API Key
 
     @staticmethod
     def init_app(app):
@@ -337,6 +339,7 @@ def create_app(config_name='default'):
         api.add_resource(NotificationListResource, '/api/v1/notifications')
         api.add_resource(NotificationResource, '/api/v1/notifications/<int:notif_id>')
         api.add_resource(UnreadCountResource, '/api/v1/notifications/unread_count')
+        api.add_resource(ImageGenerationResource, '/api/v1/generate_image') # Added image generation resource
 
         # --- Manually add routes for MyProfileResource --- 
         # Instantiate the resource once (though it's stateless here)

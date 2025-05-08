@@ -1,0 +1,82 @@
+.image-generator-form-container {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+}
+
+.image-generator-form-container h4 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.5rem; /* Consistent with CreatePostForm */
+    color: var(--text-color-headings);
+}
+
+.image-generator-form-container .form-group {
+    margin-bottom: 1rem;
+}
+
+.image-generator-form-container label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.image-generator-form-container textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color-light);
+    border-radius: 4px;
+    font-size: 1rem;
+    line-height: 1.5;
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    transition: border-color 0.2s ease-in-out;
+}
+
+.image-generator-form-container textarea:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--primary-color-focus-shadow);
+}
+
+.image-generator-form-container .button-primary {
+    /* Assuming you have a global .button-primary style or use existing button styles */
+    /* If not, define it here or use styles from CreatePostForm button */
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.image-generator-form-container .button-primary:hover:not(:disabled) {
+    background-color: var(--primary-color-darker);
+}
+
+.image-generator-form-container .button-primary:disabled {
+    background-color: var(--button-disabled-bg);
+    cursor: not-allowed;
+}
+
+/* Error and Success Messages (assuming you have global styles, otherwise define here) */
+.image-generator-form-container .error-message {
+    color: var(--error-color);
+    background-color: var(--error-bg-color);
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    border: 1px solid var(--error-border-color);
+}
+
+.image-generator-form-container .success-message {
+    color: var(--success-color);
+    background-color: var(--success-bg-color);
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    border: 1px solid var(--success-border-color);
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import CreatePostForm from './CreatePostForm';
+import ImageGeneratorForm from './ImageGeneratorForm'; // Import the new form
 import Post from './Post';
 import Spinner from './Spinner';
 
@@ -50,13 +51,26 @@ function Dashboard() {
 
   const handlePostCreated = (newPost) => {
     console.log("New post created, prepending to feed:", newPost);
-    // Prepend the new post to the existing posts list
     setPosts(prevPosts => [newPost, ...prevPosts]);
-    // No need to trigger a full refresh or set loading/initialLoad here
-    // The feed will naturally update on next full load or page change if needed.
-    // setCurrentPage(1);
-    // setInitialLoad(true);
-    // fetchPosts(1, false);
+  };
+
+  // Handler for when an image post is created by ImageGeneratorForm
+  const handleImagePostCreated = async (postId, imageUrl) => {
+    setLoadingPosts(true); // Show a loading indicator while we fetch the new post
+    try {
+      const response = await fetch(`/api/v1/posts/${postId}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch newly created image post');
+      }
+      const newImagePost = await response.json();
+      setPosts(prevPosts => [newImagePost, ...prevPosts]);
+    } catch (err) {
+      console.error("Error fetching image post after creation:", err);
+      setErrorPosts(err.message); // Display an error if fetching fails
+    } finally {
+      setLoadingPosts(false);
+    }
   };
 
   const handlePostDeleted = (deletedPostId) => {
@@ -103,6 +117,7 @@ function Dashboard() {
   return (
     <>
       <CreatePostForm onPostCreated={handlePostCreated} />
+      <ImageGeneratorForm onImagePostCreated={handleImagePostCreated} /> {/* Add the new form here */}
 
       <h3>{feedMessage || 'Your Feed'}</h3>
       {errorPosts && <p className="error-message">Error: {errorPosts}</p>}
@@ -135,4 +150,4 @@ function Dashboard() {
   );
 }
 
-export default Dashboard; 
+export default Dashboard;
