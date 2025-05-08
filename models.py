@@ -351,11 +351,11 @@ class Ampersound(db.Model):
     def is_visible_to(self, user):
         """Check if an ampersound is visible to a given user."""
         # Ampersound owner can always see their own ampersounds, regardless of status
-        if user and self.user_id == user.id:
+        if user and user.is_authenticated and self.user_id == user.id:
             return True
 
         # Admins can see all ampersounds
-        if user and user.user_type == UserType.ADMIN:
+        if user and user.is_authenticated and user.user_type == UserType.ADMIN:
             return True
 
         # If ampersound is not approved, only owner (checked above) or admin (checked above) can see it.
