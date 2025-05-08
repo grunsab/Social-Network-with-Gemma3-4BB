@@ -56,8 +56,8 @@ class ImageGenerationResource(Resource):
             response = openai_client.images.generate(
                 prompt=prompt,
                 model="black-forest-labs/FLUX-1-schnell",
-                n=1,
-                size="1024x1024",
+                n=4,
+                size="512x512",
                 response_format="b64_json"
             )
 
