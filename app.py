@@ -24,14 +24,14 @@ from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest,
 
 # Import Resources AFTER defining configurations and extensions
 from resources.auth import UserRegistration, UserLogin, UserLogout
-from resources.post import PostListResource, PostResource
+from resources.post import PostListResource, PostResource, PostLikeResource
 from resources.comment import CommentListResource, CommentResource
 from resources.profile import ProfileResource, MyProfileResource, profile_data_fields
 from resources.friendship import FriendRequestListResource, FriendRequestResource, FriendshipResource
 from resources.feed import FeedResource
 from resources.category import CategoryResource
 from resources.invite import InviteResource
-from resources.report import ReportResource
+from resources.report import ReportResource, ReportListResource, AdminReportListResource, AdminReportActionResource
 from resources.notification import NotificationListResource, NotificationResource, UnreadCountResource
 
 # Load environment variables early
@@ -316,6 +316,7 @@ def create_app(config_name='default'):
         api.add_resource(UserLogout, '/api/v1/logout')
         api.add_resource(PostListResource, '/api/v1/posts')
         api.add_resource(PostResource, '/api/v1/posts/<int:post_id>')
+        api.add_resource(PostLikeResource, '/api/v1/posts/<int:post_id>/like') # New endpoint for liking posts
         api.add_resource(CommentListResource, '/api/v1/posts/<int:post_id>/comments')
         api.add_resource(CommentResource, '/api/v1/comments/<int:comment_id>')
         api.add_resource(ProfileResource, '/api/v1/profiles/<string:username>')

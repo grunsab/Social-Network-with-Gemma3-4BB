@@ -4,16 +4,10 @@ import { Link } from 'react-router-dom'; // Import Link
 import './Post.css'; // Import the CSS file
 import './ProfileImages.css'; // Import profile image styles
 import Spinner from './Spinner'; // Import Spinner
-import { FaTrashAlt, FaRegCommentDots, FaPlay } from 'react-icons/fa'; // Import Trash, Comment icons, and Play icon
+import { FaTrashAlt, FaRegCommentDots, FaPlay, FaHeart, FaRegHeart } from 'react-icons/fa'; // Import Trash, Comment, Play, and Heart icons
 import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
 import { useAmpersoundAutocomplete } from '../hooks/useAmpersoundAutocomplete'; // Import the hook
 import ReportButton from './ReportButton'; // Import the ReportButton component
-
-// Basic styling for the component -- REMOVED
-// const postStyle = { ... };
-// const imageStyle = { ... };
-// const commentSectionStyle = { ... };
-// const commentStyle = { ... };
 
 function Post({ post, onDelete }) { // Accept post object and onDelete callback
   const { currentUser } = useAuth();
@@ -23,6 +17,11 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   const [showComments, setShowComments] = useState(false);
   const [newCommentContent, setNewCommentContent] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+
+  // State for likes
+  const [likes, setLikes] = useState(post.likes_count || 0);
+  const [isLiked, setIsLiked] = useState(false); // This would ideally be determined by checking if currentUser.id is in a list of users who liked the post
+  const [likeInProgress, setLikeInProgress] = useState(false);
 
   const commentTextareaRef = useRef(null); // Ref for comment textarea
 
@@ -175,6 +174,50 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
     // to avoid re-fetching unless showComments changes from false to true.
   }, [showComments, post.id]); 
 
+  // TODO: Fetch initial like status (isLiked) if the post object doesn't provide it directly
+  // For now, we assume it starts as not liked by the current user unless the post data indicates otherwise.
+  // A more robust solution would involve the backend sending a list of liker IDs or a boolean `currentUserLiked` field.
+
+  const handleLike = async () => {
+    if (likeInProgress) return;
+    setLikeInProgress(true);
+
+    const originalLikes = likes;
+    const originalIsLiked = isLiked;
+
+    // Optimistic update
+    setLikes(isLiked ? likes - 1 : likes + 1);
+    setIsLiked(!isLiked);
+
+    try {
+      const response = await fetch(`/api/v1/posts/${post.id}/like`, {
+        method: 'POST',
+        credentials: 'include', // Important for sending session cookies
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        // Revert optimistic update on error
+        setLikes(originalLikes);
+        setIsLiked(originalIsLiked);
+        console.error("Error liking/unliking post:", data.message);
+        alert(`Error: ${data.message || 'Could not update like status.'}`);
+      } else {
+        // Confirm update from server response (optional, if server sends back new like count)
+        setLikes(data.likes_count);
+        setIsLiked(data.is_liked); // Assuming backend sends this
+        console.log('Post like status updated', data);
+      }
+    } catch (error) {
+      // Revert optimistic update on network error
+      setLikes(originalLikes);
+      setIsLiked(originalIsLiked);
+      console.error("Network error when liking/unliking post:", error);
+      alert('Network error. Could not update like status.');
+    } finally {
+      setLikeInProgress(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!isAuthor) return; // Should not happen if button isn't shown
     if (!window.confirm("Are you sure you want to delete this post?")) return;
@@ -316,6 +359,15 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
                 <FaRegCommentDots /> <span className="post-action-label">{showComments ? 'Hide' : 'Comments'} ({!showComments ? (post.comments_count || 0) : comments.length})</span>
             </button>
 
+            {/* Like Button */}
+            {currentUser && ( // Only show like button if user is logged in
+              <button onClick={handleLike} disabled={likeInProgress} className="icon-button like-button" title={isLiked ? "Unlike" : "Like"}>
+                {isLiked ? <FaHeart style={{ color: 'red' }} /> : <FaRegHeart />}
+                <span className="post-action-label">{likes}</span>
+              </button>
+            )}
+            {!currentUser && <span className="likes-count-logged-out">{likes} {likes === 1 ? 'Like' : 'Likes'}</span>}
+
             {/* Delete Button - only for author */}
             {isAuthor && (
                 <button onClick={handleDelete} className="icon-button delete-button" title="Delete Post">
@@ -437,8 +489,6 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
           </div>
         )}
       </div>
-
-      {/* TODO: Add likes button/count */}
     </div>
   );
 }

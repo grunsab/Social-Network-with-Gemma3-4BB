@@ -218,6 +218,21 @@ class Comment(db.Model):
         
         return False
 
+# New PostLike model
+class PostLike(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Ensure a user can only like a post once
+    __table_args__ = (db.UniqueConstraint('user_id', 'post_id', name='uq_user_post_like'),)
+
+    user = db.relationship('User', backref='post_likes')
+
+    def __repr__(self):
+        return f'<PostLike User: {self.user_id} Post: {self.post_id}>'
+
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
@@ -228,11 +243,19 @@ class Post(db.Model):
     comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan')
     category_scores = db.relationship('PostCategoryScore', lazy=True, cascade='all, delete-orphan')
     privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
+    likes = db.relationship('PostLike', backref='post', lazy=True, cascade='all, delete-orphan')
 
     comments_count = column_property(
         select(func.count(Comment.id))
         .where(Comment.post_id == id)
         .correlate_except(Comment)
+        .scalar_subquery()
+    )
+
+    likes_count = column_property(
+        select(func.count(PostLike.id))
+        .where(PostLike.post_id == id)
+        .correlate_except(PostLike)
         .scalar_subquery()
     )
 
