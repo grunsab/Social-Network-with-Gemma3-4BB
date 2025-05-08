@@ -106,4 +106,61 @@ class ReportResource(Resource):
             db.session.rollback()
             return abort(500, message=f"Could not submit report: {str(e)}")
 
-        return {'message': message, 'report_id': new_report.id}, 201 
+        return {'message': message, 'report_id': new_report.id}, 201
+
+class ReportListResource(Resource):
+    @login_required
+    def get(self):
+        # Basic implementation: return all reports made by the current user
+        # More advanced: pagination, filtering by status, etc.
+        if current_user.user_type not in [UserType.ADMIN, UserType.MODERATOR]:
+            reports = Report.query.filter_by(reporter_id=current_user.id).order_by(Report.timestamp.desc()).all()
+        else:
+            # Admins/Moderators can see all pending reports
+            reports = Report.query.filter_by(status=ReportStatus.PENDING).order_by(Report.timestamp.desc()).all()
+
+        # This would ideally use marshal_with for consistent output
+        return jsonify([report.to_dict() for report in reports]) # Assuming Report model has to_dict()
+
+class AdminReportListResource(Resource):
+    @login_required
+    def get(self):
+        if current_user.user_type != UserType.ADMIN:
+            abort(403, message="You are not authorized to view all reports.")
+        
+        # Admins can see all reports, regardless of status, perhaps with pagination
+        reports = Report.query.order_by(Report.timestamp.desc()).all()
+        return jsonify([report.to_dict() for report in reports]) # Assuming to_dict()
+
+admin_report_action_parser = reqparse.RequestParser()
+admin_report_action_parser.add_argument('status', type=str, required=True, help='New status for the report (e.g., RESOLVED_MANUAL, DISMISSED)', location='json')
+admin_report_action_parser.add_argument('admin_notes', type=str, required=False, help='Notes from the admin/moderator', location='json')
+
+class AdminReportActionResource(Resource):
+    @login_required
+    def patch(self, report_id):
+        if current_user.user_type != UserType.ADMIN:
+            abort(403, message="You are not authorized to modify reports.")
+
+        report = Report.query.get_or_404(report_id)
+        args = admin_report_action_parser.parse_args()
+
+        new_status_str = args.get('status')
+        admin_notes = args.get('admin_notes')
+
+        try:
+            new_status = ReportStatus(new_status_str) # Validate status
+        except ValueError:
+            abort(400, message=f"Invalid status value. Must be one of {[e.value for e in ReportStatus]}")
+
+        report.status = new_status
+        if admin_notes is not None:
+            report.admin_notes = admin_notes
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            abort(500, message=f"Could not update report: {str(e)}")
+
+        return {'message': 'Report status updated successfully', 'report': report.to_dict()}, 200

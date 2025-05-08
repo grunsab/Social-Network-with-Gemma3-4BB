@@ -50,7 +50,9 @@ post_fields = {
     'author': fields.Nested(author_fields), # Nested author data
     'classification_scores': fields.Raw(attribute='classification_scores'), # Keep as JSON object
     # Add comments count or other fields later if needed
-    'comments_count': fields.Integer # Use the column_property directly
+    'comments_count': fields.Integer, # Use the column_property directly
+    'likes_count': fields.Integer, # Add likes_count
+    'is_liked': fields.Boolean(default=False) # Add is_liked, default to False
 }
 
 post_list_fields = {
@@ -296,6 +298,17 @@ class PostResource(Resource):
         if not is_public and not is_author and not is_friend:
              return {'message': 'You do not have permission to view this post'}, 403
 
+        # Check if the current user has liked this post
+        # This requires querying the PostLike table
+        from models import PostLike # Import here to avoid circular dependency issues at top level
+        if current_user.is_authenticated:
+            post.is_liked = db.session.query(PostLike.query.filter(
+                PostLike.user_id == current_user.id,
+                PostLike.post_id == post.id
+            ).exists()).scalar()
+        else:
+            post.is_liked = False # Not liked if user is not authenticated
+
         # Return post data (need serialization)
         return post # Marshal handles the conversion
 
@@ -361,4 +374,42 @@ class PostResource(Resource):
         except Exception as e:
             db.session.rollback()
             print(f"Error updating post {post_id}: {e}")
-            return {'message': f'Error updating post: {e}'}, 500 
+            return {'message': f'Error updating post: {e}'}, 500
+
+# Resource for liking/unliking a post
+class PostLikeResource(Resource):
+    @login_required
+    def post(self, post_id):
+        post = Post.query.get_or_404(post_id)
+        
+        # Check if user can view the post before liking (optional but good practice)
+        # This reuses the visibility logic from PostResource.get, can be refactored
+        can_view = False
+        if post.privacy == PostPrivacy.PUBLIC or post.user_id == current_user.id:
+            can_view = True
+        elif post.privacy == PostPrivacy.FRIENDS:
+            if current_user.is_friend(post.author):
+                can_view = True
+        
+        if not can_view:
+            return {'message': 'You do not have permission to like this post as you cannot view it.'}, 403
+
+        from models import PostLike # Import here to avoid circular dependency issues
+
+        like = PostLike.query.filter_by(user_id=current_user.id, post_id=post.id).first()
+
+        if like:
+            # User has already liked the post, so unlike it
+            db.session.delete(like)
+            db.session.commit()
+            # Refresh likes_count from the DB property
+            db.session.refresh(post)
+            return {'message': 'Post unliked', 'likes_count': post.likes_count, 'is_liked': False}, 200
+        else:
+            # User has not liked the post, so like it
+            new_like = PostLike(user_id=current_user.id, post_id=post.id)
+            db.session.add(new_like)
+            db.session.commit()
+            # Refresh likes_count from the DB property
+            db.session.refresh(post)
+            return {'message': 'Post liked', 'likes_count': post.likes_count, 'is_liked': True}, 201

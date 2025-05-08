@@ -26,6 +26,7 @@ post_feed_fields = {
     'author': fields.Nested(author_fields),
     'classification_scores': fields.Raw(attribute='classification_scores'), 
     'comments_count': fields.Integer,  # Added comment count to feed fields
+    'likes_count': fields.Integer, # Added likes count to feed fields
     # Add relevance score if we decide to calculate and return it
     # 'relevance_score': fields.Float 
 }
@@ -92,17 +93,19 @@ class FeedResource(Resource):
         )
 
         # Define feed score weights
-        R_WEIGHT = current_app.config.get('FEED_RELEVANCE_WEIGHT', 0.6)
-        P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.2)
+        R_WEIGHT = current_app.config.get('FEED_RELEVANCE_WEIGHT', 0.5)
+        P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.15)
         D_WEIGHT = current_app.config.get('FEED_RECENCY_WEIGHT', 0.2)
+        E_WEIGHT = current_app.config.get('FEED_ENGAGEMENT_WEIGHT', 0.15) # Engagement weight
 
         # Build feed scoring query
         feed_query = db.session.query(
             Post.id.label('post_id'),
             (
                 R_WEIGHT * func.coalesce(func.sum(PostCategoryScore.score * weight_subq.c.weight), 0)
-                + P_WEIGHT * func.coalesce(Post.comments_count, 0)
-                + D_WEIGHT * (1 / (1 + (func.extract('epoch', func.now() - Post.timestamp) / 3600)))
+                + P_WEIGHT * func.coalesce(Post.comments_count, 0) # Popularity based on comments
+                + D_WEIGHT * (1 / (1 + (func.extract('epoch', func.now() - Post.timestamp) / 3600))) # Recency
+                + E_WEIGHT * func.coalesce(Post.likes_count, 0) # Engagement based on likes
             ).label('feed_score'),
             Post.timestamp.label('timestamp')
         ).select_from(Post).outerjoin(
