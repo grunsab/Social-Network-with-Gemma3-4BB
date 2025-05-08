@@ -64,107 +64,82 @@ class FeedResource(Resource):
         user_interests = UserInterest.query.filter_by(user_id=current_user.id).order_by(UserInterest.score.desc()).limit(5).all()
         interested_categories = [interest.category for interest in user_interests]
 
-        if not interested_categories:
-            # --- Fallback: Recent Posts (If no interests) ---
-            message = "Showing recent posts. Explore more to personalize your feed!"
-            print(f"DEBUG: User {current_user.id} - Taking FEED FALLBACK path", file=sys.stderr)
-            combined_filter = or_(
-                Post.user_id == current_user.id,
-                Post.privacy == PostPrivacy.PUBLIC,
-                and_(
-                    Post.privacy == PostPrivacy.FRIENDS,
-                    Post.user_id.in_(friend_ids)
-                )
-            )
-            # Count total items matching the filter (before category blocking)
-            total_items = db.session.query(func.count(Post.id)).filter(combined_filter).scalar()
-            print(f"DEBUG: User {current_user.id} - Fallback total_items: {total_items}", file=sys.stderr)
-
-            # Fetch posts for the current page
-            posts_unfiltered = Post.query.options(
-                joinedload(Post.author),
-                joinedload(Post.category_scores), # Need scores for category blocking below
-                undefer(Post.comments_count)  # Ensure comments_count is loaded
-            ).filter(combined_filter).order_by(Post.timestamp.desc()).limit(per_page).offset(offset).all()
-            print(f"DEBUG: User {current_user.id} - Fallback posts_unfiltered IDs: {[p.id for p in posts_unfiltered]}", file=sys.stderr)
-
-        else:
-            # --- Personalized Feed Logic --- 
-            message = "Showing personalized feed based on your interests."
-            print(f"DEBUG: User {current_user.id} - Taking FEED PERSONALIZED path with interests: {interested_categories}", file=sys.stderr)
-            user_interest_subq = db.session.query(
+        # Modern feed algorithm leveraging Gemma classification, popularity, and recency
+        # Determine weight subquery (user or global interests)
+        if interested_categories:
+            weight_query = db.session.query(
                 UserInterest.category,
-                UserInterest.score
+                UserInterest.score.label('weight')
             ).filter(
                 UserInterest.user_id == current_user.id,
                 UserInterest.category.in_(interested_categories)
-            ).subquery('user_interest_subq')
-
-            # Base query for calculating relevance of posts (Public or Friend's) not authored by current user
-            relevance_base_query = db.session.query(
-                Post.id.label('post_id'),
-                func.coalesce(func.sum(
-                    PostCategoryScore.score * user_interest_subq.c.score
-                ), 0).label('relevance_score'),
-                Post.timestamp.label('timestamp')
-            ).select_from(Post).outerjoin(
-                PostCategoryScore, Post.id == PostCategoryScore.post_id
-            ).outerjoin(
-                user_interest_subq, PostCategoryScore.category == user_interest_subq.c.category
-            ).filter(
-                or_(
-                    Post.user_id == current_user.id,
-                    Post.privacy == PostPrivacy.PUBLIC,
-                    and_(
-                        Post.privacy == PostPrivacy.FRIENDS,
-                        Post.user_id.in_(friend_ids)
-                    )
-                )
-            ).group_by(Post.id, Post.timestamp)
-
-            # Order by relevance score, then timestamp
-            ordered_relevance_query = relevance_base_query.order_by(
-                desc('relevance_score'), # Posts with no matching score/interest will have score 0
-                desc('timestamp')
             )
+        else:
+            weight_query = db.session.query(
+                UserInterest.category,
+                func.sum(UserInterest.score).label('weight')
+            ).group_by(UserInterest.category)
+        weight_subq = weight_query.subquery('weight_subq')
 
-            # Get total count for pagination
-            # Let's recalculate total_items based on visibility filter only for pagination accuracy.
-            visibility_filter_for_count = or_(
-                Post.user_id == current_user.id,
-                Post.privacy == PostPrivacy.PUBLIC,
-                and_(
-                    Post.privacy == PostPrivacy.FRIENDS,
-                    Post.user_id.in_(friend_ids)
-                )
+        # Common visibility filter for posts
+        combined_filter = or_(
+            Post.user_id == current_user.id,
+            Post.privacy == PostPrivacy.PUBLIC,
+            and_(
+                Post.privacy == PostPrivacy.FRIENDS,
+                Post.user_id.in_(friend_ids)
             )
-            total_items = db.session.query(func.count(Post.id)).filter(visibility_filter_for_count).scalar()
-            # total_items = ordered_relevance_query.count() # Old count might be inaccurate with outer join
-            print(f"DEBUG: User {current_user.id} - Personalized total_items (recalculated): {total_items}", file=sys.stderr)
+        )
 
-            # Apply pagination to the relevance query to get IDs for the current page
-            paginated_relevance_items = ordered_relevance_query.limit(per_page).offset(offset).all()
-            ordered_post_ids = [item.post_id for item in paginated_relevance_items]
-            print(f"DEBUG: User {current_user.id} - Personalized ordered_post_ids: {ordered_post_ids}", file=sys.stderr)
+        # Define feed score weights
+        R_WEIGHT = current_app.config.get('FEED_RELEVANCE_WEIGHT', 0.6)
+        P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.2)
+        D_WEIGHT = current_app.config.get('FEED_RECENCY_WEIGHT', 0.2)
 
-            # Fetch full Post objects for these IDs
-            if ordered_post_ids:
-                posts_unfiltered = Post.query.filter(Post.id.in_(ordered_post_ids)).options(
-                    joinedload(Post.author),
-                    joinedload(Post.category_scores),
-                    undefer(Post.content),
-                    undefer(Post.comments_count)  # Load comments_count for personalized posts
-                ).all()
-                # Re-order based on the relevance query result order
-                posts_map = {p.id: p for p in posts_unfiltered}
-                posts_unfiltered = [posts_map[pid] for pid in ordered_post_ids if pid in posts_map]
-            else:
-                posts_unfiltered = []
+        # Build feed scoring query
+        feed_query = db.session.query(
+            Post.id.label('post_id'),
+            (
+                R_WEIGHT * func.coalesce(func.sum(PostCategoryScore.score * weight_subq.c.weight), 0)
+                + P_WEIGHT * func.coalesce(Post.comments_count, 0)
+                + D_WEIGHT * (1 / (1 + (func.extract('epoch', func.now() - Post.timestamp) / 3600)))
+            ).label('feed_score'),
+            Post.timestamp.label('timestamp')
+        ).select_from(Post).outerjoin(
+            PostCategoryScore, Post.id == PostCategoryScore.post_id
+        ).outerjoin(
+            weight_subq, PostCategoryScore.category == weight_subq.c.category
+        ).filter(
+            combined_filter
+        ).group_by(
+            Post.id, Post.timestamp
+        )
 
-            # Note: Simplified augmentation logic compared to original.
-            # Just adding a message if the first page is sparse.
-            if page == 1 and len(posts_unfiltered) < min(5, per_page):
-                message += " (Not many personalized posts found yet, showing most relevant.)"
+        # Get total items for pagination
+        total_items = db.session.query(func.count(Post.id)).filter(combined_filter).scalar() or 0
+
+        # Order by feed_score and timestamp, then paginate
+        ordered_feed = feed_query.order_by(desc('feed_score'), desc('timestamp'))
+        page_items = ordered_feed.limit(per_page).offset(offset).all()
+        ordered_ids = [item.post_id for item in page_items]
+
+        # Fetch posts with eager loading
+        posts_unfiltered = []
+        if ordered_ids:
+            posts = Post.query.filter(Post.id.in_(ordered_ids)).options(
+                joinedload(Post.author),
+                joinedload(Post.category_scores),
+                undefer(Post.comments_count)
+            ).all()
+            posts_map = {p.id: p for p in posts}
+            posts_unfiltered = [posts_map[pid] for pid in ordered_ids if pid in posts_map]
+
+        # Set feed message
+        message = (
+            "Showing personalized feed based on your interests."
+            if interested_categories else
+            "Showing popular posts based on global interests."
+        )
 
         # --- Final Step: Filter results by blocked categories ---
         filtered_posts = []
