@@ -155,7 +155,7 @@ describe('Post Management', () => {
     }
 
     const largeFileName = 'large-image-mock.png';
-    const fileSizeMB = 11; // > 10MB limit
+    const fileSizeMB = 3; // > 10MB limit
 
     // Get the input element and manipulate its files property
     cy.get('#post-image-input').then($input => {
@@ -171,7 +171,7 @@ describe('Post Management', () => {
     // Check for the client-side error message
     cy.get('.error-message')
       .should('be.visible')
-      .and('contain.text', 'Image file is too large (max 10MB).');
+      .and('contain.text', 'Image file is too large (max 2MB).');
 
     // Check that the file input value has been cleared by the component
     cy.get('#post-image-input').should('have.value', ''); 
