@@ -5,8 +5,7 @@ import Spinner from './Spinner';
 import { FaPlay, FaPause } from 'react-icons/fa'; // Import Play/Pause icons
 import ReportButton from './ReportButton'; // Import ReportButton
 import './PopularAmpersoundsPage.css'; // Import the CSS file
-// You might want a specific CSS file for this page later
-// import './PopularAmpersoundsPage.css';
+import { formatToLocalDateTime, formatToLocalDate } from '../utils/dateUtils';
 
 const PopularAmpersoundsPage = () => {
     const { currentUser } = useAuth(); // Get currentUser
@@ -152,7 +151,7 @@ const PopularAmpersoundsPage = () => {
                                     <Link to={`/profile/${sound.user.username}`}>@{sound.user.username}</Link>
                                 </span>
                                 <span className="ampersound-timestamp">
-                                    ({new Date(sound.timestamp).toLocaleDateString()})
+                                    ({formatToLocalDate(sound.timestamp)})
                                 </span>
                                 <span className="ampersound-play-count">
                                      - {sound.play_count ?? 0} plays
@@ -174,4 +173,4 @@ const PopularAmpersoundsPage = () => {
     );
 };
 
-export default PopularAmpersoundsPage; 
+export default PopularAmpersoundsPage;

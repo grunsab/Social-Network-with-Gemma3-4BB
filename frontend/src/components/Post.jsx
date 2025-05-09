@@ -8,6 +8,7 @@ import { FaTrashAlt, FaRegCommentDots, FaPlay, FaHeart, FaRegHeart } from 'react
 import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
 import { useAmpersoundAutocomplete } from '../hooks/useAmpersoundAutocomplete'; // Import the hook
 import ReportButton from './ReportButton'; // Import the ReportButton component
+import { formatToLocalDateTime, formatToLocalDate } from '../utils/dateUtils';
 
 function Post({ post, onDelete }) { // Accept post object and onDelete callback
   const { currentUser } = useAuth();
@@ -335,7 +336,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
               <span className="badge-public" title="Public"><i className="bi bi-globe"></i> Public</span>
             )}
           </span>
-          <span className="post-timestamp">{new Date(post.timestamp).toLocaleString()}</span>
+          <span className="post-timestamp">{formatToLocalDateTime(post.timestamp)}</span>
       </div>
 
       {/* Post Image */}
@@ -434,7 +435,7 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
                  <div className="comment-content-wrapper">
                     <PlayableContentViewer htmlContent={comment.content} />
                  </div>
-                 <span className="comment-timestamp">{new Date(comment.timestamp).toLocaleString()}</span>
+                 <span className="comment-timestamp">{formatToLocalDateTime(comment.timestamp)}</span>
                  {/* Comment Delete Button */} 
                  {currentUser && currentUser.id === comment.author?.id && (
                      <button 

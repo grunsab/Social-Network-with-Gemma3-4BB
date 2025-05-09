@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import './ManageInvites.css'; // Import the CSS file
 import Spinner from './Spinner'; // Import Spinner
 import { FaCopy } from 'react-icons/fa'; // Import Copy icon
+import { formatToLocalDateTime, formatToLocalDate } from '../utils/dateUtils';
 
 function ManageInvites() {
   const { currentUser } = useAuth(); // Needed?
@@ -94,7 +95,7 @@ function ManageInvites() {
                     <span className="invite-details">(Reg URL missing)</span>
                   )}
                 </div>
-                <small className="invite-details"> (Created: {new Date(code.timestamp).toLocaleDateString()})</small>
+                <small className="invite-details"> (Created: {formatToLocalDate(code.timestamp)})</small>
               </li>
             ))}
           </ul>
@@ -111,7 +112,7 @@ function ManageInvites() {
               <li key={code.id} className="invite-list-item">
                 <code className="invite-code">{code.code}</code>
                 <span>Used by: {code.used_by_username || `User ID ${code.used_by_id}`}</span>
-                <small className="invite-details"> (Created: {new Date(code.timestamp).toLocaleDateString()})</small>
+                <small className="invite-details"> (Created: {formatToLocalDate(code.timestamp)})</small>
               </li>
             ))}
           </ul>
@@ -123,4 +124,4 @@ function ManageInvites() {
   );
 }
 
-export default ManageInvites; 
+export default ManageInvites;

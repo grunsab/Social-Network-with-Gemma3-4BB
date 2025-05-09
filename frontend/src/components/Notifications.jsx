@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { formatToLocalDateTime, formatToLocalDate } from '../utils/dateUtils';
 
 function Notifications() {
   const { currentUser, setUnreadCount } = useAuth(); // Assuming setUnreadCount is available from AuthContext
@@ -87,7 +88,7 @@ function Notifications() {
           >
             {notif.actor.username} {notif.notification_type === 'comment' ? 'commented on your post' : notif.notification_type}
             <span className="notification-timestamp">
-              {new Date(notif.timestamp).toLocaleString()}
+              {formatToLocalDateTime(notif.timestamp)}
             </span>
           </li>
         ))}

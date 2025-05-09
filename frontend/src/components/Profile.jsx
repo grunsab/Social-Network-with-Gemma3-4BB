@@ -7,6 +7,7 @@ import './ProfilePicture.css'; // Import the profile picture CSS
 import Spinner from './Spinner'; // Import Spinner
 import AmpersoundRecorder from './AmpersoundRecorder'; // Import AmpersoundRecorder
 import { FaTrashAlt, FaPlay, FaPause, FaCamera } from 'react-icons/fa'; // Import icons
+import { formatToLocalDateTime, formatToLocalDate } from '../utils/dateUtils';
 
 function Profile() {
   const { username } = useParams(); // Get username from URL parameter
@@ -456,7 +457,7 @@ function Profile() {
                                 <div className="ampersound-info">
                                     <span className="ampersound-name">&{sound.name}</span>
                                     <span className="ampersound-timestamp">
-                                        ({new Date(sound.timestamp).toLocaleDateString()})
+                                        ({formatToLocalDate(sound.timestamp)})
                                     </span>
                                     {/* Display privacy status */}
                                     <span className={`ampersound-privacy-status ${sound.privacy === 'friends' ? 'privacy-friends' : 'privacy-public'}`}>
