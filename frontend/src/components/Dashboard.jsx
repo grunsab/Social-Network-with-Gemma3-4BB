@@ -14,13 +14,15 @@ function Dashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [feedMessage, setFeedMessage] = useState('');
   const [initialLoad, setInitialLoad] = useState(true);
+  const [sortBy, setSortBy] = useState('recency'); // Added sortBy state, default to recency
   const observerTarget = useRef(null);
 
-  const fetchPosts = useCallback(async (pageToFetch = 1, append = false) => {
+  const fetchPosts = useCallback(async (pageToFetch = 1, append = false, sortOrder = sortBy) => {
     setLoadingPosts(true);
     setErrorPosts('');
     try {
-      const response = await fetch(`/api/v1/feed?page=${pageToFetch}&per_page=10`);
+      // Include sort_by parameter in the API call
+      const response = await fetch(`/api/v1/feed?page=${pageToFetch}&per_page=10&sort_by=${sortOrder}`);
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.message || 'Failed to fetch feed');
@@ -39,22 +41,25 @@ function Dashboard() {
       setLoadingPosts(false);
       setInitialLoad(false);
     }
-  }, []);
+  }, [sortBy]); // Add sortBy to dependencies of fetchPosts
 
   useEffect(() => {
     if (currentUser) {
       setCurrentPage(1);
       setInitialLoad(true);
-      fetchPosts(1, false);
+      fetchPosts(1, false, sortBy); // Pass sortBy to initial fetch
     }
-  }, [currentUser, fetchPosts]);
+  }, [currentUser, fetchPosts, sortBy]); // Add sortBy to dependencies of this effect
 
   const handlePostCreated = (newPost) => {
     console.log("New post created, prepending to feed:", newPost);
+    // If sorting by recency, new post should appear at the top.
+    // If sorting by relevance, it's complex, so for now, prepend and let next fetch re-sort.
     setPosts(prevPosts => [newPost, ...prevPosts]);
+    // Optionally, could re-fetch if sortBy is 'relevance' to ensure accurate placement,
+    // but that might be too disruptive. For now, prepend.
   };
 
-  // Handler for when an image post is created by ImageGeneratorForm
   const handleImagePostCreated = async (postId, imageUrl) => {
     setLoadingPosts(true); // Show a loading indicator while we fetch the new post
     try {
@@ -64,6 +69,7 @@ function Dashboard() {
         throw new Error(errorData.message || 'Failed to fetch newly created image post');
       }
       const newImagePost = await response.json();
+      // Similar to handlePostCreated, prepend for now.
       setPosts(prevPosts => [newImagePost, ...prevPosts]);
     } catch (err) {
       console.error("Error fetching image post after creation:", err);
@@ -80,9 +86,9 @@ function Dashboard() {
   
   const loadMorePosts = useCallback(() => {
     if (currentPage < totalPages && !loadingPosts) {
-        fetchPosts(currentPage + 1, true);
+        fetchPosts(currentPage + 1, true, sortBy); // Pass sortBy to loadMorePosts
     }
-  }, [currentPage, totalPages, loadingPosts, fetchPosts]);
+  }, [currentPage, totalPages, loadingPosts, fetchPosts, sortBy]); // Add sortBy to dependencies
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -106,6 +112,14 @@ function Dashboard() {
     };
   }, [loadMorePosts]);
 
+  // Handler for changing sort order
+  const handleSortChange = (newSortBy) => {
+    setSortBy(newSortBy);
+    setCurrentPage(1); // Reset to first page
+    setInitialLoad(true); // Trigger loading state for new sort
+    // fetchPosts will be called by the useEffect watching sortBy
+  };
+
   if (!currentUser) {
     return <p>Please log in to see the dashboard.</p>;
   }
@@ -118,6 +132,20 @@ function Dashboard() {
     <>
       <CreatePostForm onPostCreated={handlePostCreated} />
       <ImageGeneratorForm onImagePostCreated={handleImagePostCreated} /> {/* Add the new form here */}
+
+      {/* Sort options UI */}
+      <div className="feed-sort-options" style={{ margin: '1rem 0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <label htmlFor="sort-by-select" style={{ marginRight: '0.5rem' }}>Sort by: </label>
+        <select 
+          id="sort-by-select"
+          value={sortBy}
+          onChange={(e) => handleSortChange(e.target.value)}
+          style={{ padding: '0.25rem', borderRadius: '4px' }}
+        >
+          <option value="relevance">Relevance</option>
+          <option value="recency">Recency</option>
+        </select>
+      </div>
 
       <h3>{feedMessage || 'Your Feed'}</h3>
       {errorPosts && <p className="error-message">Error: {errorPosts}</p>}
