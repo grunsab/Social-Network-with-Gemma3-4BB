@@ -195,7 +195,7 @@ class User(UserMixin, db.Model):
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
     visibility = db.Column(db.Enum(CommentVisibility), default=CommentVisibility.PUBLIC, nullable=False) # Added visibility
@@ -245,7 +245,7 @@ class PostLike(db.Model):
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     image_url = db.Column(db.String(512), nullable=True) # URL for the image stored in S3
     classification_scores = db.Column(db.JSON, nullable=True) # Store combined classification results as JSON
@@ -418,7 +418,7 @@ class Notification(db.Model):
     notification_type = db.Column(db.Enum(NotificationType), default=NotificationType.COMMENT, nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
     comment_id = db.Column(db.Integer, db.ForeignKey('comment.id', ondelete='CASCADE'), nullable=False) # Added ondelete='CASCADE'
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relationships
