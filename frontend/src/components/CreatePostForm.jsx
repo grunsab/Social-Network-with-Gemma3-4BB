@@ -253,7 +253,7 @@ function CreatePostForm({ onPostCreated }) { // Accept callback to refresh post 
         </div>
         {/* Remove inline style from div */}
         <div> 
-          <label htmlFor="post-image-input">Image (Optional, Max 10MB):</label>
+          <label htmlFor="post-image-input">Image (Optional, Max 3MB):</label>
           {/* Input type file might need custom styling later if desired */}
           <input 
             type="file"
