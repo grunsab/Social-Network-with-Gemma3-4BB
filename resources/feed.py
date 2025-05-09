@@ -93,10 +93,10 @@ class FeedResource(Resource):
         )
 
         # Define feed score weights
-        R_WEIGHT = current_app.config.get('FEED_RELEVANCE_WEIGHT', 0.4)
-        P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.1)
-        D_WEIGHT = current_app.config.get('FEED_RECENCY_WEIGHT', 0.4) # Recency weight
-        E_WEIGHT = current_app.config.get('FEED_ENGAGEMENT_WEIGHT', 0.1) # Engagement weight
+        R_WEIGHT = current_app.config.get('FEED_RELEVANCE_WEIGHT', 0.2) # Relevance weight
+        P_WEIGHT = current_app.config.get('FEED_POPULARITY_WEIGHT', 0.05) # Popularity weight
+        D_WEIGHT = current_app.config.get('FEED_RECENCY_WEIGHT', 0.7) # Recency weight
+        E_WEIGHT = current_app.config.get('FEED_ENGAGEMENT_WEIGHT', 0.05) # Engagement weight
         S_PENALTY_WEIGHT = current_app.config.get('FEED_SELF_POST_PENALTY_WEIGHT', 0.2) # Penalty for self-posts
 
         # Define normalization constants
