@@ -94,6 +94,22 @@ function escapeHtml(unsafe) {
          .replace(/'/g, "&#039;");
  }
 
+function formatLocalTimestamps(container) {
+    container.querySelectorAll('.local-timestamp').forEach(span => {
+        const isoTimestamp = span.dataset.timestamp;
+        if (isoTimestamp) {
+            try {
+                // Use toLocaleString() for date and time in user's locale
+                span.textContent = new Date(isoTimestamp).toLocaleString();
+            } catch (error) {
+                console.error("Error formatting timestamp:", isoTimestamp, error);
+                span.textContent = 'Invalid date';
+            }
+        } else {
+            span.textContent = ''; // Clear if no timestamp
+        }
+    });
+}
 
 function deleteComment(commentId, postId) {
     // Consider adding CSRF token handling here if your app uses it
@@ -276,4 +292,4 @@ if (document.readyState === 'loading') {
 } else {
     // DOMContentLoaded has already fired
     initializeCommentHandling();
-} 
+}
