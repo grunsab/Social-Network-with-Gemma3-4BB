@@ -208,15 +208,20 @@ describe('Feed Pagination', () => {
     // paginationPosterUser creates posts needed for pagination test
     cy.login(paginationPosterUser.username, paginationPosterUser.password);
     cy.log(`Creating ${totalPostsToCreate} posts as ${paginationPosterUser.username} for pagination test...`);
-    let chain = cy;
+    
+    // Ensure posts are created sequentially and beforeEach completes after all are done.
+    let postCreationChain = cy.noop(); // Start with a no-operation command
     Cypress._.times(totalPostsToCreate, (i) => {
-      chain = chain.createPost({ 
-        content: `Pagination Test Post ${i + 1}/${totalPostsToCreate} by ${paginationPosterUser.username} - ${Date.now()}`,
-        privacy: 'PUBLIC' 
+      postCreationChain = postCreationChain.then(() => { // Chain the next createPost
+        return cy.createPost({ 
+          content: `Pagination Test Post ${i + 1}/${totalPostsToCreate} by ${paginationPosterUser.username} - ${Date.now()}`,
+          privacy: 'PUBLIC' 
+        });
       });
     });
-    chain.then(() => {
-        cy.log(`${totalPostsToCreate} posts created by ${paginationPosterUser.username}.`);
+
+    postCreationChain.then(() => {
+      cy.log(`All ${totalPostsToCreate} posts created by ${paginationPosterUser.username}.`);
     });
   });
 
@@ -231,8 +236,11 @@ describe('Feed Pagination', () => {
     // Verify initial page load (10 posts containing "Pagination Test Post")
     cy.get('.posts-list .post:contains("Pagination Test Post")').should('have.length', postsPerPage);
     cy.wait('@getInitialFeed').then(interception => {
-      cy.log('Initial Feed Total Items:', interception.response.body.total_items);
-      cy.log('Initial Feed Total Pages:', interception.response.body.total_pages);
+      cy.log('Initial Feed API Response:', interception.response.body);
+      const expectedTotalItems = totalPostsToCreate;
+      const expectedTotalPages = Math.ceil(totalPostsToCreate / postsPerPage);
+      expect(interception.response.body.total_items, 'Total items in initial feed').to.eq(expectedTotalItems);
+      expect(interception.response.body.total_pages, 'Total pages in initial feed').to.eq(expectedTotalPages);
     });
     
     // Ensure the load more trigger exists and end message is not yet visible
@@ -250,8 +258,12 @@ describe('Feed Pagination', () => {
     // cy.wait('@loadPage2').its('response.statusCode').should('eq', 200);
     cy.wait('@loadPage2').then((interception) => {
         expect(interception.response.statusCode).to.eq(200);
-        cy.log('Page 2 Feed Total Items:', interception.response.body.total_items);
-        cy.log('Page 2 Feed Total Pages:', interception.response.body.total_pages);
+        cy.log('Page 2 Feed API Response:', interception.response.body);
+        const expectedTotalItems = totalPostsToCreate;
+        const expectedTotalPages = Math.ceil(totalPostsToCreate / postsPerPage);
+        expect(interception.response.body.total_items, 'Total items in page 2 feed response').to.eq(expectedTotalItems);
+        expect(interception.response.body.total_pages, 'Total pages in page 2 feed response').to.eq(expectedTotalPages);
+        expect(interception.response.body.page, 'Current page in page 2 feed response').to.eq(2);
     });
 
     // cy.get('.spinner').should('not.exist'); // Check spinner gone
@@ -259,12 +271,13 @@ describe('Feed Pagination', () => {
     // Verify total posts visible (expecting 12 now)
     cy.get('.posts-list .post:contains("Pagination Test Post")').should('have.length', totalPostsToCreate);
 
-    // Verify Load More trigger is gone (or not visible if it's removed from DOM when no more pages)
-    // Depending on implementation, it might still exist but not trigger more loads, or be removed.
-    // For now, let's assume it should not be visible if there are no more pages.
-    cy.get('[data-cy="feed-load-more-trigger"]').should('not.exist');
+    // Add a small wait to ensure DOM updates are processed after all posts are loaded.
+    cy.wait(100); 
 
-    // Verify End of feed message is visible
+    // Verify End of feed message is visible first
     cy.contains('p', 'End of feed.').should('be.visible');
+
+    // Verify Load More trigger is gone (or not visible if it's removed from DOM when no more pages)
+    cy.get('[data-cy="feed-load-more-trigger"]').should('not.exist');
   });
 });

@@ -148,29 +148,47 @@ Cypress.Commands.add('logout', () => {
 // Custom command to delete all posts by the currently logged-in user
 Cypress.Commands.add('deleteAllMyPosts', () => {
   cy.log('Attempting to delete all posts for current user...');
-  cy.request({
+  let currentUsername = 'unknown'; // For logging
+
+  return cy.request({ // Ensure this command returns the Cypress chain
     method: 'GET',
     url: '/api/v1/profiles/me',
-    // failOnStatusCode: false // Let it fail if /me doesn't load, so we know earlier
-  }).then(response => {
-    // No need to check response.status === 200 here, as default behavior is to fail on >=400
-    if (response.body.posts && response.body.posts.length > 0) {
-      const posts = response.body.posts;
-      cy.log(`Found ${posts.length} posts to delete for ${response.body.user.username}.`);
-      // Use Cypress.Promise.all to wait for all delete requests to complete
-      const deletePromises = posts.map(post => {
-        return cy.request({
+    // failOnStatusCode: false // Default is true, let it fail if /me doesn't load
+  }).then(profileResponse => {
+    // Check if profileResponse.body and profileResponse.body.user exist
+    if (profileResponse && profileResponse.body && profileResponse.body.user) {
+      currentUsername = profileResponse.body.user.username;
+    } else {
+      cy.log('Could not retrieve username from /profiles/me response.');
+      // Potentially throw an error or handle as appropriate if user info is critical
+    }
+
+    const posts = profileResponse.body.posts;
+    if (posts && posts.length > 0) {
+      cy.log(`User ${currentUsername} has ${posts.length} posts to delete.`);
+      
+      // Start a Cypress chain with a no-op command.
+      // Each subsequent delete request will be chained to this.
+      let deleteChain = cy.noop(); 
+      
+      posts.forEach(post => {
+        deleteChain = deleteChain.request({
           method: 'DELETE',
           url: `/api/v1/posts/${post.id}`,
-          // failOnStatusCode: true // Default, let it fail if a delete fails
+          // failOnStatusCode: true by default. If a delete fails, the command chain will fail.
         }).then(deleteResponse => {
-          cy.log(`Deleted post ${post.id} successfully.`);
+          // This .then() is part of the chain and will execute sequentially for each post.
+          cy.log(`Delete response for post ${post.id} (user: ${currentUsername}): Status ${deleteResponse.status}`);
         });
       });
-      // Ensure all deletions are processed before this command is considered done
-      return Cypress.Promise.all(deletePromises);
+      
+      return deleteChain; // Return the fully constructed chain of delete operations.
     } else {
-      cy.log(`No posts found for ${response.body.user.username} to delete.`);
+      cy.log(`No posts found for user ${currentUsername} to delete.`);
+      // No need to return cy.wrap(null) explicitly if there's nothing to chain,
+      // the .then() will implicitly return.
+      // However, to be explicit for the command's return value:
+      return cy.wrap(null, { log: false }); // Signify completion with no further actions.
     }
   });
 });
