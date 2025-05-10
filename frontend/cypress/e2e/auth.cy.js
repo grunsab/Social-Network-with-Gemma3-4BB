@@ -69,16 +69,25 @@ describe('Authentication Flow', () => {
     cy.get('#email').type(uniqueEmail);
     cy.get('#password').type(password);
 
+    // Intercept the registration API call
+    cy.intercept('POST', '/api/v1/register').as('registerRequest');
+
     // Submit the form
     cy.get('button[type="submit"]').contains(/register/i).click();
+
+    // Wait for the API call to complete
+    cy.wait('@registerRequest').then((interception) => {
+      expect(interception.response.statusCode).to.eq(201); // Or whatever success code your API returns
+    });
 
     // Assert success message is displayed (using the class)
     cy.get('.success-message')
       .should('be.visible')
       .and('contain.text', 'Registration successful! Redirecting to login...');
 
-    // Assert redirection to login page (Cypress waits automatically)
-    cy.url().should('eq', Cypress.config().baseUrl + '/login');
+    // Assert redirection to login page (Cypress waits automatically for this if success message check passes quickly)
+    // Adding a specific timeout for URL check to ensure it waits for the redirect to complete.
+    cy.url({ timeout: 5000 }).should('eq', Cypress.config().baseUrl + '/login');
     
     // Optional: Check if the login form is now visible on the login page
     // cy.contains('h2', 'Login').should('be.visible');
@@ -191,4 +200,4 @@ describe('Authentication Flow', () => {
     cy.url().should('include', '/register'); 
   });
 
-}); 
+});
