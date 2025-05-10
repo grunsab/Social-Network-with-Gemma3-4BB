@@ -31,7 +31,8 @@ Cypress.Commands.add('login', (usernameOrEmail, password) => {
     cy.get('#password').type(password);
     cy.get('button[type="submit"]').contains(/login/i).click();
     // Verify successful login - check URL lands on the root/dashboard
-    cy.url().should('eq', Cypress.config().baseUrl + '/');
+    // Allow for trailing slash or no trailing slash
+    cy.url().should('match', new RegExp(Cypress.config().baseUrl + '/?$'));
   }, {
     // Optional: configure session validation
     validate: () => {
@@ -175,29 +176,70 @@ Cypress.Commands.add('deleteAllMyPosts', () => {
 });
 
 // Custom command to ensure a user exists, registers if not.
-Cypress.Commands.add('ensureUserExists', ({ username, email, password }) => {
-  cy.request({
-    method: 'POST',
-    url: '/api/v1/register',
-    body: {
+Cypress.Commands.add('ensureUserExists', ({ username, email, password, inviteCode = null }) => {
+  const attemptRegistration = (currentInviteCode) => {
+    const registrationBody = {
       username: username,
       email: email,
       password: password
-    },
-    failOnStatusCode: false 
-  }).then((response) => {
+    };
+    if (currentInviteCode) {
+      registrationBody.invite_code = currentInviteCode;
+    }
+
+    return cy.request({
+      method: 'POST',
+      url: '/api/v1/register',
+      body: registrationBody,
+      failOnStatusCode: false
+    });
+  };
+
+  attemptRegistration(inviteCode).then((response) => {
     if (response.status === 201) {
       cy.log(`User ${username} created successfully via ensureUserExists.`);
     } else if (response.status === 409) {
       cy.log(`User ${username} already exists (confirmed by 409).`);
-    } else if (response.status === 400 && response.body.message && response.body.message.includes('Invalid or used invite code')){
-      cy.log(`ensureUserExists: Registration for ${username} blocked by invite code requirement. User might not exist.`);
-      // This is a specific case we might allow to pass, assuming invite codes aren't mandatory for base users.
-      // Or, we could throw an error here if these users SHOULD be creatable without codes.
-      // throw new Error(`ensureUserExists: Registration for ${username} failed due to mandatory invite code.`);
+    } else if (response.status === 400 && response.body.message && response.body.message.toLowerCase().includes('invite code is required')) {
+      cy.log(`ensureUserExists: Registration for ${username} requires an invite code. Attempting to generate one.`);
+      
+      // Log in as a user who can generate invite codes (e.g., 'testuser')
+      // IMPORTANT: Ensure 'testuser'/'password' can register without an invite or already exists.
+      // This could lead to a loop if 'testuser' itself needs an invite code and doesn't exist.
+      // For this scenario, we assume 'testuser' is a base user or can be created.
+      cy.login('testuser', 'password'); // Hardcoded for now, consider Cypress.env()
+
+      let generatedInviteCode = '';
+      cy.request({
+        method: 'POST',
+        url: '/api/v1/invites', // Endpoint to generate an invite code
+      }).then((inviteResponse) => {
+        expect(inviteResponse.status).to.eq(201);
+        if (inviteResponse.body.code) {
+          generatedInviteCode = inviteResponse.body.code;
+        } else if (typeof inviteResponse.body === 'string') {
+          generatedInviteCode = inviteResponse.body;
+        } else {
+          generatedInviteCode = inviteResponse.body?.invite?.code || inviteResponse.body?.data?.code;
+        }
+        if (!generatedInviteCode) {
+          throw new Error('ensureUserExists: Could not extract generated invite code.');
+        }
+        cy.log(`Generated invite code: ${generatedInviteCode}`);
+        cy.logout(); // Logout the 'testuser'
+      }).then(() => {
+        // Retry registration with the generated invite code
+        return attemptRegistration(generatedInviteCode);
+      }).then((retryResponse) => {
+        if (retryResponse.status === 201) {
+          cy.log(`User ${username} created successfully with generated invite code.`);
+        } else if (retryResponse.status === 409) {
+          cy.log(`User ${username} already exists (confirmed by 409 on retry).`);
+        } else {
+          throw new Error(`ensureUserExists: Failed to register ${username} even with a generated invite code. API responded with ${retryResponse.status}: ${JSON.stringify(retryResponse.body)}`);
+        }
+      });
     } else if (response.status >= 400) {
-      // Any other error from registration means the user likely wasn't ensured.
-      // Throw an error to make the test failure point to ensureUserExists directly.
       throw new Error(`ensureUserExists: Failed to ensure user ${username}. API responded with ${response.status}: ${JSON.stringify(response.body)}`);
     }
   });
