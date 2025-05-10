@@ -67,13 +67,18 @@ class FeedResource(Resource):
         interested_categories = [interest.category for interest in user_interests]
 
         # Common visibility filter for posts
-        combined_filter = or_(
-            Post.user_id == current_user.id,
+        # Exclude own posts from the feed
+        not_own_post_filter = Post.user_id != current_user.id
+        visibility_filter = or_(
             Post.privacy == PostPrivacy.PUBLIC,
             and_(
                 Post.privacy == PostPrivacy.FRIENDS,
                 Post.user_id.in_(friend_ids)
             )
+        )
+        combined_filter = and_(
+            not_own_post_filter,
+            visibility_filter
         )
 
         # Get total items for pagination (applies to both sort methods)

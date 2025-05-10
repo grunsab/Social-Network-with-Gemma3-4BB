@@ -240,7 +240,7 @@ describe('Feed Pagination', () => {
     cy.contains('p', 'End of feed.').should('not.exist');
 
     // Intercept the next page request
-    cy.intercept('GET', '/api/v1/feed?page=2&per_page=10').as('loadPage2');
+    cy.intercept('GET', '/api/v1/feed?page=2&per_page=10*').as('loadPage2');
 
     // Scroll to the trigger element to load more posts
     cy.get('[data-cy="feed-load-more-trigger"]').scrollIntoView();
@@ -267,4 +267,4 @@ describe('Feed Pagination', () => {
     // Verify End of feed message is visible
     cy.contains('p', 'End of feed.').should('be.visible');
   });
-}); 
+});
