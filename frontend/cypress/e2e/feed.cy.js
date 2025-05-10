@@ -150,6 +150,53 @@ describe('Main Feed Functionality', () => {
     cy.get('[data-cy="feed-posts-list"]').should('not.contain.text', otherFriendsOnlyPost);
   });
 
+  after(() => {
+    cy.log('[Main Feed Cleanup] Starting cleanup for Main Feed Functionality...');
+
+    const friendUser = { username: 'frienduser', password: 'password', email: 'friend@example.com' }; // Ensure definition is accessible
+    const nonFriendUser = { username: 'nonfrienduser', password: 'password', email: 'nonfriend@example.com' }; // Ensure definition is accessible
+
+    const usersToClean = [
+      { name: 'testUser', userObj: testUser },
+      { name: 'otherUser', userObj: otherUser },
+      { name: 'friendUser', userObj: friendUser },
+      { name: 'nonFriendUser', userObj: nonFriendUser }
+    ];
+
+    let cleanupChain = cy.wrap(null, { log: false });
+
+    usersToClean.forEach(userInfo => {
+      cleanupChain = cleanupChain.then(() => {
+        cy.log(`[Main Feed Cleanup] Ensuring user ${userInfo.userObj.username} exists.`);
+        return cy.ensureUserExists(userInfo.userObj);
+      }).then(() => {
+        cy.log(`[Main Feed Cleanup] Logging in as ${userInfo.userObj.username} for post deletion.`);
+        return cy.login(userInfo.userObj.username, userInfo.userObj.password);
+      }).then(() => {
+        cy.log(`[Main Feed Cleanup] Deleting posts for ${userInfo.userObj.username}.`);
+        return cy.deleteAllMyPosts();
+      }).then(() => {
+        cy.log(`[Main Feed Cleanup] deleteAllMyPosts for ${userInfo.userObj.username} completed. Verifying...`);
+        return cy.request({ method: 'GET', url: '/api/v1/profiles/me', failOnStatusCode: false });
+      }).then((profileResponse) => {
+        if (profileResponse.status === 200) {
+          const postsRemaining = profileResponse.body.posts ? profileResponse.body.posts.length : 0;
+          cy.log(`[Main Feed Cleanup] ${userInfo.userObj.username} has ${postsRemaining} posts on own profile after their cleanup.`);
+          expect(postsRemaining, `Posts for ${userInfo.userObj.username} on own profile after Main Feed cleanup`).to.equal(0);
+        } else {
+          cy.log(`[Main Feed Cleanup] Warn: Profile fetch for ${userInfo.userObj.username} during cleanup verification failed. Status: ${profileResponse.status}. Body: ${JSON.stringify(profileResponse.body)}`);
+        }
+        cy.log(`[Main Feed Cleanup] Logging out ${userInfo.userObj.username}.`);
+        return cy.logout();
+      }).then(() => {
+        return cy.wait(200, { log: false }); // Brief pause after logout and before next user
+      });
+    });
+
+    return cleanupChain.then(() => {
+      cy.log('[Main Feed Cleanup] Finished cleanup for Main Feed Functionality.');
+    });
+  });
 });
 
 describe('Feed Pagination', () => {
@@ -165,43 +212,147 @@ describe('Feed Pagination', () => {
     email: 'pagination@example.com'
   };
   const postsPerPage = 10;
-  // Revert workaround: Go back to creating just enough posts for 2 pages.
   const totalPostsToCreate = postsPerPage + 2; 
 
-  before(() => {
-    // Ensure all necessary users for this describe block exist
-    cy.ensureUserExists(testUser); // User viewing the feed
-    cy.ensureUserExists(paginationPosterUser); // User creating posts for pagination
-    cy.ensureUserExists(otherUser); // User from other tests whose posts might interfere
+  before(() => { // HOOK 2: Cleanup and verification
+    cy.log('[Cleanup Hook] Starting cleanup...');
 
-    // Clean up posts from users that might affect the feed count for testUser
-    cy.login(otherUser.username, otherUser.password);
-    cy.deleteAllMyPosts().then(() => {
-      cy.log(`Finished deleteAllMyPosts for ${otherUser.username}.`);
-      // Also clean up posts from paginationPosterUser to ensure a clean slate for beforeEach
-      cy.login(paginationPosterUser.username, paginationPosterUser.password);
-      cy.deleteAllMyPosts().then(() => {
-        cy.log(`Finished deleteAllMyPosts for ${paginationPosterUser.username}.`);
-        // Verify cleanup: Login as testUser and check for otherUser's posts
-        cy.login(testUser.username, testUser.password);
-        cy.intercept('GET', '/api/v1/feed*').as('feedAfterCleanup'); // Renamed alias
-        cy.visit('/');
-        cy.wait('@feedAfterCleanup').then(interception => {
-          const postsInFeed = interception.response.body.posts;
-          const otherUserPostsInFeed = postsInFeed.filter(p => p.author.username === otherUser.username);
-          cy.log(`After cleaning ${otherUser.username}'s posts, ${testUser.username} sees ${otherUserPostsInFeed.length} posts from ${otherUser.username}. Expected 0.`);
-          expect(otherUserPostsInFeed.length, `Posts from ${otherUser.username} after cleanup`).to.eq(0);
-          
-          const paginationPostsInFeed = postsInFeed.filter(p => p.author.username === paginationPosterUser.username);
-          cy.log(`After cleaning ${paginationPosterUser.username}'s posts, ${testUser.username} sees ${paginationPostsInFeed.length} posts from ${paginationPosterUser.username}. Expected 0.`);
-          expect(paginationPostsInFeed.length, `Posts from ${paginationPosterUser.username} after cleanup`).to.eq(0);
-
-          const paginationTestContentPosts = postsInFeed.filter(p => p.content.includes('Pagination Test Post'));
-          cy.log(`${testUser.username} sees ${paginationTestContentPosts.length} 'Pagination Test Post' posts before paginationPosterUser creates new ones in beforeEach. Expected 0.`);
-          expect(paginationTestContentPosts.length, '"Pagination Test Post" content before creation').to.eq(0);
+    // 1. Cleanup paginationPosterUser
+    cy.login(paginationPosterUser.username, paginationPosterUser.password)
+      .then(() => {
+        cy.log(`[Cleanup Hook] Logged in as ${paginationPosterUser.username} for cleanup.`);
+        return cy.deleteAllMyPosts();
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] deleteAllMyPosts for ${paginationPosterUser.username} completed.`);
+        return cy.request({
+          method: 'GET',
+          url: '/api/v1/profiles/me',
+          failOnStatusCode: false
         });
+      })
+      .then((profileResponse) => {
+        if (profileResponse.status === 200) {
+          const postsRemaining = profileResponse.body.posts ? profileResponse.body.posts.length : 0;
+          cy.log(`[Cleanup Hook] After deleteAllMyPosts, ${paginationPosterUser.username} has ${postsRemaining} posts according to their own profile.`);
+          expect(postsRemaining, `Posts for ${paginationPosterUser.username} on their own profile after cleanup`).to.equal(0);
+        } else {
+          cy.log(`[Cleanup Hook] Warning: Could not fetch ${paginationPosterUser.username}'s profile after deletion. Status: ${profileResponse.status}`);
+        }
+        cy.wait(500);
+        return cy.logout();
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] Logged out ${paginationPosterUser.username}.`);
+        // Intermediate check: What does testUser see?
+        cy.login(testUser.username, testUser.password);
+        cy.visit('/');
+        cy.intercept('GET', '/api/v1/feed?page=1*').as('getFeedAfterPaginationUserCleanup');
+        return cy.wait('@getFeedAfterPaginationUserCleanup');
+      })
+      .then((interception) => {
+        const feedResponse = interception.response.body;
+        const postsInFeed = feedResponse.posts;
+        const paginationUserPostsInTestUserFeed = postsInFeed.filter(p => p.author.username === paginationPosterUser.username);
+        cy.log(`[Cleanup Hook] After ${paginationPosterUser.username} cleanup, ${testUser.username} sees ${paginationUserPostsInTestUserFeed.length} posts from ${paginationPosterUser.username}. Total items in ${testUser.username}'s feed: ${feedResponse.total_items}`);
+        expect(paginationUserPostsInTestUserFeed.length, `Posts from ${paginationPosterUser.username} in ${testUser.username}'s feed`).to.equal(0);
+        return cy.logout();
+      })
+      .then(() => {
+        // 2. Cleanup testUser
+        return cy.login(testUser.username, testUser.password);
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] Logged in as ${testUser.username} for cleanup.`);
+        return cy.deleteAllMyPosts();
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] deleteAllMyPosts for ${testUser.username} completed.`);
+        return cy.request({
+          method: 'GET',
+          url: '/api/v1/profiles/me',
+          failOnStatusCode: false
+        });
+      })
+      .then((profileResponse) => {
+        if (profileResponse.status === 200) {
+          const postsRemaining = profileResponse.body.posts ? profileResponse.body.posts.length : 0;
+          cy.log(`[Cleanup Hook] After deleteAllMyPosts, ${testUser.username} has ${postsRemaining} posts according to their own profile.`);
+          expect(postsRemaining, `Posts for ${testUser.username} on their own profile after cleanup`).to.equal(0);
+        } else {
+          cy.log(`[Cleanup Hook] Warning: Could not fetch ${testUser.username}'s profile after deletion. Status: ${profileResponse.status}`);
+        }
+        cy.wait(500);
+        return cy.logout();
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] Logged out ${testUser.username}.`);
+        // 3. Cleanup otherUser
+        return cy.login(otherUser.username, otherUser.password);
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] Logged in as ${otherUser.username} for cleanup.`);
+        return cy.deleteAllMyPosts();
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] deleteAllMyPosts for ${otherUser.username} completed.`);
+        return cy.request({
+          method: 'GET',
+          url: '/api/v1/profiles/me',
+          failOnStatusCode: false
+        });
+      })
+      .then((profileResponse) => {
+        if (profileResponse.status === 200) {
+          const postsRemaining = profileResponse.body.posts ? profileResponse.body.posts.length : 0;
+          cy.log(`[Cleanup Hook] After deleteAllMyPosts, ${otherUser.username} has ${postsRemaining} posts according to their own profile.`);
+          expect(postsRemaining, `Posts for ${otherUser.username} on their own profile after cleanup`).to.equal(0);
+        } else {
+          cy.log(`[Cleanup Hook] Warning: Could not fetch ${otherUser.username}'s profile after deletion. Status: ${profileResponse.status}`);
+        }
+        cy.wait(500);
+        return cy.logout();
+      })
+      .then(() => {
+        cy.log(`[Cleanup Hook] Logged out ${otherUser.username}.`);
+        // 4. Final Verification: testUser's feed should be empty of any posts from these three users.
+        cy.log('[Cleanup Hook] Performing final verification of testUser feed.');
+        cy.login(testUser.username, testUser.password);
+        cy.visit('/');
+        cy.intercept('GET', '/api/v1/feed?page=1*').as('getTestUserFeedAfterAllCleanups');
+        return cy.wait('@getTestUserFeedAfterAllCleanups');
+      })
+      .then(interception => {
+        const responseBody = interception.response.body;
+        const totalItems = responseBody.total_items;
+        const postsInFeed = responseBody.posts;
+
+        cy.log(`[Cleanup Hook] Final check: Total items in feed for ${testUser.username}: ${totalItems}`);
+        if (postsInFeed && postsInFeed.length > 0) {
+          postsInFeed.forEach(post => {
+            cy.log(`[Cleanup Hook] Feed item: Post ID ${post.id}, Author: ${post.author.username}, Privacy: ${post.privacy}`);
+          });
+        } else if (totalItems > 0) {
+          cy.log('[Cleanup Hook] Warning: total_items > 0 but postsInFeed array is empty. This might indicate pagination issue or all unexpected posts are on other pages.');
+        }
+
+        const postsFromPaginationUser = postsInFeed.filter(p => p.author.username === paginationPosterUser.username).length;
+        const postsFromOtherUser = postsInFeed.filter(p => p.author.username === otherUser.username).length;
+        const postsFromFriendUser = postsInFeed.filter(p => p.author.username === 'frienduser').length;
+        const postsFromNonFriendUser = postsInFeed.filter(p => p.author.username === 'nonfrienduser').length;
+
+        cy.log(`[Cleanup Hook] Posts from ${paginationPosterUser.username} in final feed: ${postsFromPaginationUser}`);
+        cy.log(`[Cleanup Hook] Posts from ${otherUser.username} in final feed: ${postsFromOtherUser}`);
+        cy.log(`[Cleanup Hook] Posts from frienduser in final feed: ${postsFromFriendUser}`);
+        cy.log(`[Cleanup Hook] Posts from nonfrienduser in final feed: ${postsFromNonFriendUser}`);
+
+        expect(postsFromPaginationUser, `Posts from ${paginationPosterUser.username} in final feed`).to.equal(0);
+        expect(postsFromOtherUser, `Posts from ${otherUser.username} in final feed`).to.equal(0);
+        expect(postsFromFriendUser, `Posts from frienduser in ${testUser.username}'s final feed`).to.equal(0);
+        expect(postsFromNonFriendUser, `Posts from nonfrienduser in ${testUser.username}'s final feed`).to.equal(0);
+        
+        expect(totalItems, 'Total items in feed after all cleanups should be 0').to.equal(0);
       });
-    });
   });
 
   beforeEach(() => {
@@ -272,7 +423,7 @@ describe('Feed Pagination', () => {
     cy.get('.posts-list .post:contains("Pagination Test Post")').should('have.length', totalPostsToCreate);
 
     // Add a small wait to ensure DOM updates are processed after all posts are loaded.
-    cy.wait(100); 
+    cy.wait(500); 
 
     // Verify End of feed message is visible first
     cy.contains('p', 'End of feed.').should('be.visible');

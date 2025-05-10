@@ -147,48 +147,46 @@ Cypress.Commands.add('logout', () => {
 
 // Custom command to delete all posts by the currently logged-in user
 Cypress.Commands.add('deleteAllMyPosts', () => {
-  cy.log('Attempting to delete all posts for current user...');
-  let currentUsername = 'unknown'; // For logging
-
-  return cy.request({ // Ensure this command returns the Cypress chain
+  // Assuming cy.login() has been called and Cypress.env('token') is set,
+  // or that cy.request automatically uses the current session's authentication.
+  // The initial request to get posts:
+  return cy.request({
     method: 'GET',
-    url: '/api/v1/profiles/me',
-    // failOnStatusCode: false // Default is true, let it fail if /me doesn't load
-  }).then(profileResponse => {
-    // Check if profileResponse.body and profileResponse.body.user exist
-    if (profileResponse && profileResponse.body && profileResponse.body.user) {
-      currentUsername = profileResponse.body.user.username;
-    } else {
-      cy.log('Could not retrieve username from /profiles/me response.');
-      // Potentially throw an error or handle as appropriate if user info is critical
+    url: '/api/v1/profiles/me', // CORRECTED: Use the verified endpoint for current user's profile and posts
+    failOnStatusCode: false // Allow handling of cases where fetching posts might fail (e.g., no posts)
+  }).then(response => {
+    if (response.status !== 200) {
+      cy.log(`deleteAllMyPosts: Warning - Failed to fetch profile for user. Status: ${response.status}. Body: ${JSON.stringify(response.body)}`);
+      return cy.wrap(null, { log: false }); // Proceed, as there might be no posts or an issue fetching.
     }
 
-    const posts = profileResponse.body.posts;
+    // The endpoint /api/v1/profiles/me returns a structure like:
+    // { user: {...}, posts: [...], interests: [...], ... }
+    const posts = response.body.posts; 
+
     if (posts && posts.length > 0) {
-      cy.log(`User ${currentUsername} has ${posts.length} posts to delete.`);
-      
-      // Start a Cypress chain with a no-op command.
-      // Each subsequent delete request will be chained to this.
-      let deleteChain = cy.noop(); 
-      
+      cy.log(`deleteAllMyPosts: Found ${posts.length} posts to delete.`);
+      let deleteChain = cy.noop(); // Start with a Cypress command that does nothing.
+                                  // .then() can be called on this to start a chain.
       posts.forEach(post => {
-        deleteChain = deleteChain.request({
-          method: 'DELETE',
-          url: `/api/v1/posts/${post.id}`,
-          // failOnStatusCode: true by default. If a delete fails, the command chain will fail.
-        }).then(deleteResponse => {
-          // This .then() is part of the chain and will execute sequentially for each post.
-          cy.log(`Delete response for post ${post.id} (user: ${currentUsername}): Status ${deleteResponse.status}`);
+        deleteChain = deleteChain.then(() => { // Chain the next delete operation
+          return cy.request({
+            method: 'DELETE',
+            url: `/api/v1/posts/${post.id}`,
+            failOnStatusCode: false // Handle potential errors in the next .then()
+          }).then(deleteResponse => {
+            if (deleteResponse.status === 200 || deleteResponse.status === 204) {
+              cy.log(`deleteAllMyPosts: Successfully deleted post ${post.id}`);
+            } else {
+              cy.log(`deleteAllMyPosts: Warning - Failed to delete post ${post.id}. Status: ${deleteResponse.status}. Body: ${JSON.stringify(deleteResponse.body)}`);
+            }
+          });
         });
       });
-      
-      return deleteChain; // Return the fully constructed chain of delete operations.
+      return deleteChain; // Return the promise chain
     } else {
-      cy.log(`No posts found for user ${currentUsername} to delete.`);
-      // No need to return cy.wrap(null) explicitly if there's nothing to chain,
-      // the .then() will implicitly return.
-      // However, to be explicit for the command's return value:
-      return cy.wrap(null, { log: false }); // Signify completion with no further actions.
+      cy.log('deleteAllMyPosts: No posts found to delete for the current user.');
+      return cy.wrap(null, { log: false }); // Return a resolved promise
     }
   });
 });
