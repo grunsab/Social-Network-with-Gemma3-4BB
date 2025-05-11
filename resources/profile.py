@@ -179,14 +179,9 @@ class MyProfileResource(Resource):
         args = profile_patch_parser.parse_args()
         user_updated = False
 
-        # Update invites_left if provided
+        # Remove the ability to update invites_left via PATCH
         if args['invites_left'] is not None:
-            # Optional: Add validation (e.g., must be non-negative)
-            if args['invites_left'] < 0:
-                 abort(400, message="invites_left cannot be negative.")
-            current_user.invites_left = args['invites_left']
-            user_updated = True
-            print(f"INFO: Resetting invites for {current_user.username} to {args['invites_left']}")
+            abort(403, message="You cannot modify invites_left.")
 
         # Update profile_picture if provided
         if args['profile_picture'] is not None:
