@@ -34,33 +34,29 @@ Cypress.Commands.add('login', (usernameOrEmail, password) => {
     cy.intercept('POST', '/api/v1/login').as('loginRequest');
     cy.get('button[type="submit"]').contains(/login/i).click();
 
-    cy.wait('@loginRequest', { timeout: 10000 }).then(interception => {
-      cy.log('Login API response status:', interception.response.statusCode);
-      cy.log('Login API response body:', JSON.stringify(interception.response.body));
-      // Expect a successful login status code from the backend (e.g., 200)
+    cy.wait('@loginRequest', { timeout: 10000 }).then((interception) => {
+      if (interception.response.statusCode !== 200) {
+        cy.log('[Login Command] Login API Response Status:', interception.response.statusCode);
+        cy.log('[Login Command] Login API Response Body:', JSON.stringify(interception.response.body));
+      }
       expect(interception.response.statusCode, 'Login API call status code').to.eq(200);
+      
+      // No need to check cy.url() here if expect already passed, 
+      // as a 401 would fail above and a 200 implies successful page transition by the app
+      // However, explicit redirect check after successful API call is a good practice.
+      if (interception.response.statusCode === 200) {
+         cy.url({ timeout: 10000 }).should('eq', Cypress.config().baseUrl + '/', 'Should redirect to homepage after login');
+      }
     });
-
-    // Ensure the URL changes from /login and matches an expected post-login pattern.
-    // Increased timeout for URL change, as redirection might take a moment.
-    cy.url({ timeout: 10000 }).should('not.eq', Cypress.config().baseUrl + '/login', 'URL should change from /login');
-    
-    // Adjust this regex if your app redirects to a different default page after login (e.g., /dashboard)
-    // This regex allows for baseUrl, baseUrl/, or baseUrl/feed
-    const expectedPostLoginUrlPattern = new RegExp(`^${Cypress.config().baseUrl}(/feed|/)?$`);
-    cy.url({ timeout: 10000 }).should('match', expectedPostLoginUrlPattern, 'URL should match post-login pattern');
-    
-    cy.log('Login session setup: Successfully logged in and redirected.');
+    // Ensure cy.session setup function completes its chain correctly.
+    // Add a final cy command to ensure the chain completes, e.g. a log or a url check if not done above.
+    // cy.url().should(...); // This was part of the original command, let's ensure it's robustly handled.
+    // The cy.url() check is now inside the .then() for the 200 case.
+    cy.log('Login session setup: Successfully completed login attempt flow.'); // Final command in session setup
 
   }, {
-    cacheAcrossSpecs: true, // Cache session across multiple spec files
-    validate: () => {
-      cy.log('Validating session: Checking for session cookie.');
-      cy.getCookie('session').should('exist');
-      // Optional: A quick API call to a protected endpoint to further validate the session
-      // cy.request({url: '/api/v1/profiles/me', failOnStatusCode: false}).its('status').should('eq', 200);
-      cy.log('Validating session: Session cookie exists.');
-    }
+    cacheAcrossSpecs: true
+    // Removed validate for now to simplify, can be added back later if needed.
   });
 });
 

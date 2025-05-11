@@ -530,13 +530,27 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
                     # if 'is_active' in desired_state and hasattr(user, 'is_active'):
                     # user.is_active = desired_state['is_active']
                     
-                    # Example: Clear posts for testuser (if needed for clean state)
-                    # if username == 'testuser':
-                    #     Post.query.filter_by(user_id=user.id).delete()
-                    #     InviteCode.query.filter_by(issuer_id=user.id).delete() # Also clear issued invite codes
+                    # Clear existing invite codes for the user before potentially creating a new one
+                    if username == 'testuser': # Or more generally, if specified in desired_state
+                        InviteCode.query.filter_by(issuer_id=user.id).delete()
+                        # Ensure Post deletion or other cleanups are also here if needed for 'testuser'
+                        # Post.query.filter_by(user_id=user.id).delete()
+                        app.logger.info(f"Test setup: Cleared existing invite codes for user '{username}'.")
+
+                    # Create a new default invite code if requested
+                    if desired_state.get('create_default_invite', True):
+                        default_invite = InviteCode(issuer_id=user.id)
+                        db.session.add(default_invite)
+                        app.logger.info(f"Test setup: Created default invite code for user '{username}'.")
 
                     db.session.commit()
-                    app.logger.info(f"Test setup: User '{username}' state reset.")
+                    app.logger.info(f"Test setup: User '{username}' state reset. Committed to DB.")
+
+                    # Diagnostic log: Query invites for the user immediately after commit
+                    if username == 'testuser':
+                        final_invites_count = InviteCode.query.filter_by(issuer_id=user.id, is_used=False).count()
+                        app.logger.info(f"Test setup: DIAGNOSTIC - User '{username}' has {final_invites_count} unused invite(s) in DB after commit.")
+
                     return jsonify({"message": f"User {username} state reset successfully"}), 200
 
                 except Exception as e:
