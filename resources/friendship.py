@@ -29,20 +29,16 @@ friend_request_manage_parser.add_argument('action', type=str, required=True, cho
 
 class FriendRequestListResource(Resource):
     # List pending received friend requests
+    @login_required
     @marshal_with(friend_request_fields)
     def get(self):
-        if not current_user.is_authenticated:
-            return login_manager.unauthorized()
-            
         pending_requests = current_user.get_pending_received_requests()
-        return pending_requests
+        return pending_requests, 200
 
     # Send a new friend request
+    @login_required
     @marshal_with(friend_request_fields)
     def post(self):
-        if not current_user.is_authenticated:
-            return login_manager.unauthorized()
-            
         args = friend_request_parser.parse_args()
         user_to_request = User.query.get(args['user_id'])
         

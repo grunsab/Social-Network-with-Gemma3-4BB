@@ -26,19 +26,40 @@
 
 Cypress.Commands.add('login', (usernameOrEmail, password) => {
   cy.session([usernameOrEmail, password], () => {
+    cy.log(`Login session setup: Attempting to login as ${usernameOrEmail}`);
     cy.visit('/login');
     cy.get('#identifier').type(usernameOrEmail);
     cy.get('#password').type(password);
+
+    cy.intercept('POST', '/api/v1/login').as('loginRequest');
     cy.get('button[type="submit"]').contains(/login/i).click();
-    // Verify successful login - check URL lands on the root/dashboard
-    // Allow for trailing slash or no trailing slash
-    cy.url().should('match', new RegExp(Cypress.config().baseUrl + '/?$'));
+
+    cy.wait('@loginRequest', { timeout: 10000 }).then(interception => {
+      cy.log('Login API response status:', interception.response.statusCode);
+      cy.log('Login API response body:', JSON.stringify(interception.response.body));
+      // Expect a successful login status code from the backend (e.g., 200)
+      expect(interception.response.statusCode, 'Login API call status code').to.eq(200);
+    });
+
+    // Ensure the URL changes from /login and matches an expected post-login pattern.
+    // Increased timeout for URL change, as redirection might take a moment.
+    cy.url({ timeout: 10000 }).should('not.eq', Cypress.config().baseUrl + '/login', 'URL should change from /login');
+    
+    // Adjust this regex if your app redirects to a different default page after login (e.g., /dashboard)
+    // This regex allows for baseUrl, baseUrl/, or baseUrl/feed
+    const expectedPostLoginUrlPattern = new RegExp(`^${Cypress.config().baseUrl}(/feed|/)?$`);
+    cy.url({ timeout: 10000 }).should('match', expectedPostLoginUrlPattern, 'URL should match post-login pattern');
+    
+    cy.log('Login session setup: Successfully logged in and redirected.');
+
   }, {
-    // Optional: configure session validation
+    cacheAcrossSpecs: true, // Cache session across multiple spec files
     validate: () => {
-      // Add checks here to ensure the session is still valid if needed
-      // e.g., check for a cookie or local storage item
-      cy.getCookie('session').should('exist'); // Example check
+      cy.log('Validating session: Checking for session cookie.');
+      cy.getCookie('session').should('exist');
+      // Optional: A quick API call to a protected endpoint to further validate the session
+      // cy.request({url: '/api/v1/profiles/me', failOnStatusCode: false}).its('status').should('eq', 200);
+      cy.log('Validating session: Session cookie exists.');
     }
   });
 });

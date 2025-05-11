@@ -3,7 +3,7 @@ import json
 import uuid
 import sys
 import base64
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for
 from flask_login import login_required, current_user
 from flask_restful import Api
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -265,13 +265,16 @@ class GemmaClassification:
 
 
 # --- Application Factory ---
-def create_app(config_name='default'):
+def create_app(config_name='default', overrides=None): # Add overrides parameter
     
     try:
         app = Flask(__name__, static_folder='frontend/dist', static_url_path='/app_assets') # Corrected static folder path
 
         # Load configuration from the selected class
         app.config.from_object(config[config_name])
+        if overrides: # Apply overrides here
+            app.config.from_mapping(overrides)
+
         config[config_name].init_app(app) # Call static init_app if defined
 
         # Initialize CORS
@@ -291,14 +294,19 @@ def create_app(config_name='default'):
         # Initialize Flask-Restful AFTER app is created
         api = Api(app)
 
-        # Custom unauthorized handler for APIs
+        # Configure Flask-Login
+        login_manager.init_app(app)
+
         @login_manager.unauthorized_handler
         def unauthorized():
-            # Return a JSON response, which is typical for APIs
-            # Flask-RESTful might also handle this, but explicit is good.
+            # For an API-only application, always return 401 when unauthorized
             response = jsonify(message="Authentication required.")
             response.status_code = 401
             return response
+
+        @login_manager.user_loader
+        def load_user(user_id):
+            return db.session.get(User, int(user_id))
 
         # Initialize S3 client if config is present
         s3_client = None
@@ -376,11 +384,6 @@ def create_app(config_name='default'):
             # Return data with default 200 status.
             response_data = my_profile_view.patch()
             return jsonify(response_data), 200
-
-        # --- User Loader for Flask-Login ---
-        @login_manager.user_loader
-        def load_user(user_id):
-            return User.query.get(int(user_id))
 
         # --- Method Override (can stay as is) ---
         @app.before_request

@@ -1,4 +1,4 @@
-from flask import request, jsonify, session
+from flask import request, jsonify, session, current_app
 from flask_restful import Resource
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, InviteCode # Import InviteCode
@@ -16,14 +16,15 @@ class UserRegistration(Resource):
         invite_code_obj = None # To store the valid InviteCode object if found
 
         # --- Invite Code Validation ---
-        # Make invite code mandatory
-        if not invite_code_str:
-            return {'message': 'Invite code is required for registration'}, 400
+        # Make invite code mandatory only if INVITE_ONLY is True
+        if current_app.config.get('INVITE_ONLY', True):
+            if not invite_code_str:
+                return {'message': 'Invite code is required for registration'}, 400
 
-        invite_code_obj = InviteCode.query.filter_by(code=invite_code_str).first()
-        # Check if code exists and is still valid (i.e., NOT used)
-        if not invite_code_obj or invite_code_obj.is_used:
-            return {'message': 'Invalid or used invite code'}, 400 # Bad Request
+            invite_code_obj = InviteCode.query.filter_by(code=invite_code_str).first()
+            if not invite_code_obj or invite_code_obj.is_used:
+                return {'message': 'Invalid or used invite code'}, 400 # Bad Request
+        # If INVITE_ONLY is False, we can proceed without an invite code (invite_code_obj will be None)
 
         if not username or not email or not password:
             return {'message': 'Missing username, email, or password'}, 400

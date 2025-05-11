@@ -36,7 +36,7 @@ def test_report_own_post(client, create_user, create_post, regular_user_auth_dat
         'content_id': own_post.id,
         'reason': 'Trying to report myself'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     
     assert response.status_code == 400 # Expect Bad Request
     json_data = response.get_json()
@@ -50,7 +50,7 @@ def test_report_missing_content_type(client, regular_user_auth_data):
         'content_id': 1,
         'reason': 'Test reason'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 400 # Expect Bad Request
     json_data = response.get_json()
     # The actual message might depend on your reqparse setup, 
@@ -65,7 +65,7 @@ def test_report_missing_content_id(client, regular_user_auth_data):
         # 'content_id': 1, # Missing
         'reason': 'Test reason'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 400 # Expect Bad Request
     json_data = response.get_json()
     assert 'content_id' in json_data['message']
@@ -78,7 +78,7 @@ def test_report_invalid_content_type_value(client, regular_user_auth_data):
         'content_id': 1,
         'reason': 'Test reason'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 400 # Expect Bad Request
     json_data = response.get_json()
     # When an invalid choice is provided, reqparse uses the 'help' string for that argument as the error message.
@@ -93,7 +93,7 @@ def test_report_non_existent_post(client, regular_user_auth_data):
         'content_id': 99999, # Assuming this ID does not exist
         'reason': 'Test reason'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 404 # Expect Not Found
     json_data = response.get_json()
     assert "Post with ID 99999 not found" in json_data['message']
@@ -106,7 +106,7 @@ def test_report_non_existent_comment(client, regular_user_auth_data):
         'content_id': 99999, # Assuming this ID does not exist
         'reason': 'Test reason'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 404 # Expect Not Found
     json_data = response.get_json()
     assert "Comment with ID 99999 not found" in json_data['message']
@@ -119,7 +119,7 @@ def test_report_non_existent_ampersound(client, regular_user_auth_data):
         'content_id': 99999, # Assuming this ID does not exist
         'reason': 'Test reason'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 404 # Expect Not Found
     json_data = response.get_json()
     assert "Ampersound with ID 99999 not found" in json_data['message']
@@ -141,7 +141,7 @@ def test_successful_report_post_by_regular_user(client, create_user, create_post
         'content_id': post_to_report.id,
         'reason': 'This post is offensive.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     
     assert response.status_code == 201
     json_data = response.get_json()
@@ -179,7 +179,7 @@ def test_successful_report_comment_by_regular_user(client, create_user, create_p
         'content_id': comment_to_report.id,
         'reason': 'This comment is inappropriate.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     
     assert response.status_code == 201
     json_data = response.get_json()
@@ -210,7 +210,7 @@ def test_successful_report_ampersound_by_regular_user(client, create_user, creat
         'content_id': ampersound_to_report.id,
         'reason': 'This ampersound is problematic.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     
     assert response.status_code == 201
     json_data = response.get_json()
@@ -242,16 +242,12 @@ def test_duplicate_report_by_same_user(client, create_user, create_post, regular
         'reason': 'First report reason.'
     }
     # First report - should succeed
-    response1 = client.post('/api/v1/reports', json=report_data, headers=auth_headers)
+    response1 = client.post('/api/v1/reports', json=report_data)
     assert response1.status_code == 201
-
-    # Second attempt to report the same content
-    report_data_again = {
-        'content_type': 'post',
-        'content_id': post_to_report.id,
-        'reason': 'Second report attempt.'
-    }
-    response2 = client.post('/api/v1/reports', json=report_data_again, headers=auth_headers)
+    report_id = response1.get_json()['report_id']
+    
+    # Attempt to report the same content again by the same user
+    response2 = client.post('/api/v1/reports', json=report_data)
     assert response2.status_code == 409 # Expect Conflict
     json_data2 = response2.get_json()
     assert json_data2['message'] == "You have already reported this content."
@@ -302,7 +298,7 @@ def test_admin_report_on_post_restricts_all_user_content(
         'content_id': post1_by_reported.id,
         'reason': 'Admin report for restriction.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=admin_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     
     assert response.status_code == 201
     json_data = response.get_json()
@@ -347,7 +343,7 @@ def test_admin_report_on_comment_restricts_all_user_content(
         'content_id': comment_to_report.id,
         'reason': 'Admin report on comment.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=admin_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 201
     json_data = response.get_json()
     assert "Report submitted and user's content automatically restricted" in json_data['message']
@@ -383,7 +379,7 @@ def test_admin_report_on_ampersound_restricts_all_user_content(
         'content_id': ampersound_to_report.id,
         'reason': 'Admin report on ampersound.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=admin_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 201
     json_data = response.get_json()
     assert "Report submitted and user's content automatically restricted" in json_data['message']
@@ -416,7 +412,7 @@ def test_admin_report_on_user_with_only_one_content_type(
         'content_id': post_to_report.id,
         'reason': 'Admin report; user has only posts.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=admin_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 201 # Should succeed without error
     json_data = response.get_json()
     assert "Report submitted and user's content automatically restricted" in json_data['message']
@@ -444,7 +440,7 @@ def test_admin_report_on_already_restricted_content(
         'content_id': already_restricted_post.id,
         'reason': 'Admin reporting already restricted content.'
     }
-    response = client.post('/api/v1/reports', json=report_data, headers=admin_headers)
+    response = client.post('/api/v1/reports', json=report_data)
     assert response.status_code == 201
     json_data = response.get_json()
     assert "Report submitted and user's content automatically restricted" in json_data['message']

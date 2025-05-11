@@ -35,11 +35,18 @@ author_fields = {
 # Formatted content field for Ampersounds
 class FormattedContent(fields.Raw):
     def format(self, value):
-        # 'value' here is the post object itself, passed via attribute
-        post_object = value
-        if not post_object.content or not post_object.author:
-            return post_object.content # Return original content if no author or content
-        return format_text_with_ampersounds(post_object.content, post_object.author.username)
+        # value can be a Post object or an error dictionary
+        if not isinstance(value, Post) or not hasattr(value, 'content') or not hasattr(value, 'author') or not value.author:
+            # If it's not a Post object with content and author, or if author is None,
+            # return it as is (if dict) or its content attribute if it has one but no author.
+            if isinstance(value, dict):
+                return value #likely an error message dict
+            elif hasattr(value, 'content'):
+                 return value.content # Post object might lack author in some edge cases, return raw content
+            return str(value) # Fallback for other types
+            
+        # It is a Post object with content and author
+        return format_text_with_ampersounds(value.content, value.author.username)
 
 post_fields = {
     'id': fields.Integer,

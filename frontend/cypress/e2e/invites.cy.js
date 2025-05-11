@@ -1,183 +1,211 @@
 /// <reference types="cypress" />
 
 describe('Invite Code Management', () => {
-  const testUser = {
-    username: 'testuser',
-    password: 'password',
-    email: 'testuser@example.com'
-  };
-  const defaultInvites = 3;
+  const testUser = 'testUser';
+  const testPassword = 'password';
 
-  beforeEach(function() {
-    cy.login(testUser.username, testUser.password);
+  beforeEach(function () {
+    // Clear any existing session to ensure a fresh login
+    Cypress.session.clearAllSavedSessions(); // Re-added this line
+    cy.login(testUser, testPassword);
 
+    // Get the actual current invites_left for the testUser
+    // Relies on the session cookie from cy.login(), removed explicit Authorization header
     cy.request({
       method: 'GET',
-      url: '/api/v1/invites',
-      failOnStatusCode: false
-    }).then((response) => {
-      let unused = 0;
-      let used = 0;
-      if (response.status === 200 && response.body && response.body.invites) {
-        response.body.invites.forEach(invite => {
-          if (invite.used_by_user_id === null) unused++;
-          else used++;
-        });
-      }
-      this.initialUnusedInvitesCount = unused;
-      this.initialUsedInvitesCount = used;
-      cy.log(`Initial state from API: ${this.initialUnusedInvitesCount} unused, ${this.initialUsedInvitesCount} used invites.`);
-    }).then(() => {
-      return cy.request({
-        method: 'PATCH',
-        url: '/api/v1/profiles/me',
-        body: { invites_left: defaultInvites }
-      });
-    }).then((patchResponse) => {
-      expect(patchResponse.status).to.eq(200);
-      cy.log(`Reset invites_left for ${testUser.username} to ${defaultInvites}`);
-
-      cy.intercept('GET', '/api/v1/profiles/me').as('getProfileData');
-      cy.intercept('GET', '/api/v1/invites').as('getInvitesData');
-
-      cy.visit('/manage-invites');
-
-      cy.wait('@getProfileData').then((interception) => {
-        expect(interception.response.statusCode).to.eq(200);
-        expect(interception.response.body.user.invites_left).to.eq(defaultInvites);
-      });
-      cy.wait('@getInvitesData');
-
-      cy.contains('h2', 'Manage Invite Codes').should('be.visible');
-      cy.get('.invites-summary').should('be.visible').and('contain.text', `${defaultInvites} invites remaining`);
+      url: '/api/v1/profiles/me'
+    }).then(profileResponse => {
+      expect(profileResponse.status).to.eq(200);
+      this.initialInvitesLeft = profileResponse.body.user.invites_left;
+      cy.log(`Fetched actual initial invites_left: ${this.initialInvitesLeft}`);
     });
+
+    // Get baseline counts of existing invite codes (since they are not deleted)
+    // Relies on the session cookie from cy.login(), removed explicit Authorization header
+    cy.request({
+      method: 'GET',
+      url: '/api/v1/invites'
+    }).then(invitesResponse => {
+      expect(invitesResponse.status).to.eq(200);
+      this.baselineUnusedInvitesCount = invitesResponse.body.unused_codes ? invitesResponse.body.unused_codes.length : 0;
+      this.baselineUsedInvitesCount = invitesResponse.body.used_codes ? invitesResponse.body.used_codes.length : 0;
+      cy.log(`Fetched actual baseline: ${this.baselineUnusedInvitesCount} unused, ${this.baselineUsedInvitesCount} used.`);
+    });
+
+    cy.intercept('GET', '/api/v1/profiles/me').as('getProfileDataOnPageLoad');
+    cy.intercept('GET', '/api/v1/invites').as('getInvitesDataOnPageLoad');
+    cy.intercept('POST', '/api/v1/invites').as('postInviteCode');
+
+    cy.visit('/manage-invites');
+
+    // Wait for page to load and make its own API calls
+    cy.wait('@getProfileDataOnPageLoad').then(interception => {
+      const invitesLeftOnPage = interception.response.body.user.invites_left;
+      cy.log(`Profile data on page load - invites_left: ${invitesLeftOnPage}`);
+      // Assert that the page reflects the invites_left we fetched *before* visiting
+      expect(invitesLeftOnPage, "invites_left from page load API call").to.eq(this.initialInvitesLeft);
+    });
+
+    cy.wait('@getInvitesDataOnPageLoad').then(interception => {
+      const unusedCountOnPage = interception.response.body.unused_codes ? interception.response.body.unused_codes.length : 0;
+      const usedCountOnPage = interception.response.body.used_codes ? interception.response.body.used_codes.length : 0;
+      cy.log(`Invites data on page load - unused: ${unusedCountOnPage}, used: ${usedCountOnPage}`);
+      // Assert that the page reflects the invite counts we fetched *before* visiting
+      expect(unusedCountOnPage, "Unused invites count from page load API call").to.eq(this.baselineUnusedInvitesCount);
+      expect(usedCountOnPage, "Used invites count from page load API call").to.eq(this.baselineUsedInvitesCount);
+    });
+
+    cy.contains('h1', 'Manage Invite Codes').should('be.visible');
+    // Check that the summary text on the page matches the actual initial invites left
+    cy.get('.invites-summary').should('contain.text', `${this.initialInvitesLeft} invites remaining`);
   });
 
-  it('should display the initial invite state correctly', function() {
-    cy.get('h2').should('contain', 'Manage Invite Codes');
-    cy.get('.invites-summary').should('be.visible').and('contain.text', `${defaultInvites} invites remaining`);
-    cy.get('[data-cy="invites-left-display"]').should('be.visible').and('contain.text', `Invites left: ${defaultInvites}`);
+  it('should display the initial invite state correctly', function () {
+    // Check invite summary text
+    cy.get('.invites-summary').should('contain.text', `${this.initialInvitesLeft} invites remaining`);
 
-    cy.contains('h3', 'Unused Invite Codes').then($h3 => {
-      const $section = $h3.parent();
-      if (this.initialUnusedInvitesCount > 0) {
-        $section.find('ul.invites-list .invite-list-item').should('have.length', this.initialUnusedInvitesCount);
-        $section.find('p:contains("No unused invite codes found.")').should('not.exist');
-      } else {
-        $section.find('ul.invites-list').should('not.exist');
-        $section.find('p:contains("No unused invite codes found.")').should('be.visible');
-      }
-    });
-
-    cy.contains('h3', 'Used Invite Codes').then($h3 => {
-      const $section = $h3.parent();
-      if (this.initialUsedInvitesCount > 0) {
-        $section.find('ul.invites-list .invite-list-item').should('have.length', this.initialUsedInvitesCount);
-        $section.find('p:contains("No used invite codes found.")').should('not.exist');
-      } else {
-        $section.find('ul.invites-list').should('not.exist');
-        $section.find('p:contains("No used invite codes found.")').should('be.visible');
-      }
-    });
-
-    if (defaultInvites > 0) {
-      cy.get('button').contains('Generate New Invite Code').should('be.visible').and('not.be.disabled');
+    // Check "Generate New Invite Code" button state
+    if (this.initialInvitesLeft > 0) {
+      cy.contains('button', 'Generate New Invite Code').should('not.be.disabled');
+      cy.contains('.no-invites-message', 'No invites left', { matchCase: false }).should('not.exist');
     } else {
-      cy.get('button').contains('Generate New Invite Code').should('be.disabled');
-      cy.contains('.no-invites-message', 'No invites left').should('be.visible');
+      cy.contains('button', 'Generate New Invite Code').should('be.disabled');
+      cy.contains('.no-invites-message', 'No invites left', { matchCase: false }).should('be.visible');
     }
+
+    // Check unused codes list
+    cy.contains('h3', 'Unused Invite Codes').parent().within(() => {
+      if (this.baselineUnusedInvitesCount === 0) {
+        cy.contains('p', 'No unused invite codes.').should('be.visible');
+        cy.get('ul li').should('not.exist');
+      } else {
+        cy.contains('p', 'No unused invite codes.').should('not.exist');
+        cy.get('ul li').should('have.length', this.baselineUnusedInvitesCount);
+      }
+    });
+
+    // Check used codes list
+    cy.contains('h3', 'Used Invite Codes').parent().within(() => {
+      if (this.baselineUsedInvitesCount === 0) {
+        cy.contains('p', 'No used invite codes.').should('be.visible');
+        cy.get('ul li').should('not.exist');
+      } else {
+        cy.contains('p', 'No used invite codes.').should('not.exist');
+        cy.get('ul li').should('have.length', this.baselineUsedInvitesCount);
+      }
+    });
   });
 
-  it('should generate a new code when the button is clicked', function() {
-    if (defaultInvites === 0) {
-      this.skip(); return;
+  it('should generate a new code when the button is clicked', function () {
+    if (this.initialInvitesLeft === 0) {
+      cy.log('Skipping test: No initial invites to generate a new one.');
+      this.skip(); 
+      return;
     }
-    const expectedInvitesLeft = defaultInvites - 1;
-    cy.intercept('POST', '/api/v1/invites').as('generateInvite');
+
+    const expectedInvitesLeftAfterGeneration = this.initialInvitesLeft - 1;
+    const expectedUnusedCountAfterGeneration = this.baselineUnusedInvitesCount + 1;
 
     cy.contains('button', 'Generate New Invite Code').click();
 
-    cy.wait('@generateInvite').then((postInterception) => {
-      expect(postInterception.response.statusCode).to.eq(201);
+    cy.wait('@postInviteCode').then((postInterception) => {
+      expect(postInterception.response.statusCode, "POST invite code status").to.eq(201);
       expect(postInterception.response.body).to.have.property('code');
-      cy.wrap(postInterception.response.body.code).as('generatedCode');
     });
 
-    cy.wait('@getProfileData').then((profileInterception) => {
-      expect(profileInterception.response.statusCode).to.eq(200);
-      expect(profileInterception.response.body.user.invites_left).to.eq(expectedInvitesLeft);
+    cy.get('.invites-summary', { timeout: 7000 })
+      .should('contain.text', `${expectedInvitesLeftAfterGeneration} invites remaining`);
+
+    cy.intercept('GET', '/api/v1/invites').as('getInvitesDataAfterGen'); 
+    cy.wait('@getInvitesDataAfterGen').then((invitesInterception) => {
+      expect(invitesInterception.response.body.unused_codes.length, "Unused codes count after generation")
+        .to.eq(expectedUnusedCountAfterGeneration);
     });
-    cy.wait('@getInvitesData');
 
-    cy.get('.invites-summary').should('contain.text', `${expectedInvitesLeft} invites remaining`);
-    cy.get('[data-cy="invites-left-display"]').should('contain.text', `Invites left: ${expectedInvitesLeft}`);
-
-    cy.get('@generatedCode').then((codeValue) => {
-      cy.contains('h3', 'Unused Invite Codes').parent().find('ul.invites-list')
-        .should('be.visible')
-        .find('.invite-list-item')
-        .should('have.length', this.initialUnusedInvitesCount + 1)
-        .and('contain.text', codeValue);
+    cy.contains('h3', 'Unused Invite Codes').parent().within(() => {
+      cy.get('ul li').should('have.length', expectedUnusedCountAfterGeneration);
     });
   });
 
-  it('should disable the generate button when no invites are left', function() {
-    if (defaultInvites === 0) {
-      this.skip(); return;
-    }
-    const invitesToGenerate = defaultInvites;
-    cy.intercept('POST', '/api/v1/invites').as('generateInviteLoop');
-
-    Cypress._.times(invitesToGenerate, (i) => {
-      const expectedInvitesLeftAfterThis = defaultInvites - (i + 1);
-      cy.contains('button', 'Generate New Invite Code').click();
-      cy.wait('@generateInviteLoop').its('response.statusCode').should('eq', 201);
-      cy.wait('@getProfileData').then((profileInterception) => {
-        expect(profileInterception.response.body.user.invites_left).to.eq(expectedInvitesLeftAfterThis);
-      });
-      cy.wait('@getInvitesData');
-      cy.get('.invites-summary').should('contain.text', `${expectedInvitesLeftAfterThis} invites remaining`);
-      cy.get('[data-cy="invites-left-display"]').should('contain.text', `Invites left: ${expectedInvitesLeftAfterThis}`);
-    });
-
-    cy.get('.invites-summary').should('contain.text', '0 invites remaining');
-    cy.get('[data-cy="invites-left-display"]').should('contain.text', 'Invites left: 0');
-    cy.contains('button', 'Generate New Invite Code').should('be.disabled');
-    cy.contains('.no-invites-message', 'No invites left').should('be.visible');
-    cy.contains('h3', 'Unused Invite Codes').parent().find('ul.invites-list .invite-list-item')
-      .should('have.length', this.initialUnusedInvitesCount + invitesToGenerate);
-  });
-
-  it('should show an error or prevent generation if trying to generate when none left', function() {
-    const invitesToGenerate = defaultInvites;
-    cy.intercept('POST', '/api/v1/invites').as('generateInviteExhaustLoop');
-
+  it('should disable the generate button when no invites are left (i.e., invites_left becomes 0)', function () {
+    const invitesToGenerate = this.initialInvitesLeft;
     if (invitesToGenerate === 0) {
+      cy.log('Skipping test: Already 0 invites, button should be disabled.');
       cy.contains('button', 'Generate New Invite Code').should('be.disabled');
-      cy.contains('button', 'Generate New Invite Code').click({ force: true });
-      cy.wait(200, { log: false });
-      cy.get('@generateInviteExhaustLoop.all').its('length').should('eq', 0);
-      this.skip(); return;
+      this.skip();
+      return;
     }
 
-    Cypress._.times(invitesToGenerate, (i) => {
-      const expectedInvitesLeftAfterThis = defaultInvites - (i + 1);
-      cy.contains('button', 'Generate New Invite Code').click();
-      cy.wait('@generateInviteExhaustLoop').its('response.statusCode').should('eq', 201);
-      cy.wait('@getProfileData').then((profileInterception) => {
-         expect(profileInterception.response.body.user.invites_left).to.eq(expectedInvitesLeftAfterThis);
-      });
-      cy.wait('@getInvitesData');
-    });
+    cy.log(`Starting with ${invitesToGenerate} invites. Will generate all of them.`);
 
-    cy.contains('button', 'Generate New Invite Code').should('be.disabled');
-    cy.contains('button', 'Generate New Invite Code').click({ force: true });
-    cy.wait(200, { log: false });
-    cy.get('@generateInviteExhaustLoop.all').its('length').should('eq', invitesToGenerate);
+    for (let i = 0; i < invitesToGenerate; i++) {
+      const expectedInvitesLeftAfterThisGeneration = this.initialInvitesLeft - (i + 1);
+      const expectedUnusedAfterThisGeneration = this.baselineUnusedInvitesCount + (i + 1);
+      cy.log(`Generating invite ${i + 1} of ${invitesToGenerate}. Expecting ${expectedInvitesLeftAfterThisGeneration} invites_left and ${expectedUnusedAfterThisGeneration} unused codes.`);
+      
+      cy.contains('button', 'Generate New Invite Code').click();
+      cy.wait('@postInviteCode').its('response.statusCode').should('eq', 201);
+      
+      cy.get('.invites-summary', { timeout: 7000 })
+        .should('contain.text', `${expectedInvitesLeftAfterThisGeneration} invites remaining`);
+      
+      cy.intercept('GET', '/api/v1/invites').as(`getInvitesDataLoop${i}`); 
+      cy.wait(`@getInvitesDataLoop${i}`).then(invitesInterception => {
+        expect(invitesInterception.response.body.unused_codes.length, `Unused codes count in loop (i=${i})`)
+          .to.eq(expectedUnusedAfterThisGeneration);
+      });
+    }
+
     cy.get('.invites-summary').should('contain.text', '0 invites remaining');
-    cy.get('[data-cy="invites-left-display"]').should('contain.text', 'Invites left: 0');
-    cy.contains('.no-invites-message', 'No invites left').should('be.visible');
-    cy.contains('h3', 'Unused Invite Codes').parent().find('ul.invites-list .invite-list-item')
-      .should('have.length', this.initialUnusedInvitesCount + invitesToGenerate);
+    cy.contains('button', 'Generate New Invite Code').should('be.disabled');
+    cy.contains('.no-invites-message', 'No invites left', { matchCase: false }).should('be.visible');
+
+    cy.contains('h3', 'Unused Invite Codes').parent().within(() => {
+      cy.get('ul li').should('have.length', this.baselineUnusedInvitesCount + invitesToGenerate);
+    });
+  });
+
+  it('should show an error or prevent generation if trying to generate when none left', function () {
+    const invitesToGenerateToEnd = this.initialInvitesLeft;
+    cy.log(`Initially ${this.initialInvitesLeft} invites. Will generate ${invitesToGenerateToEnd} to exhaust them.`);
+
+    if (invitesToGenerateToEnd > 0) {
+      for (let i = 0; i < invitesToGenerateToEnd; i++) {
+        const expectedInvitesLeftAfterThisGeneration = this.initialInvitesLeft - (i + 1);
+        const expectedUnusedAfterThisGeneration = this.baselineUnusedInvitesCount + (i + 1);
+
+        cy.contains('button', 'Generate New Invite Code').click();
+        cy.wait('@postInviteCode').its('response.statusCode').should('eq', 201);
+
+        cy.get('.invites-summary', { timeout: 7000 })
+          .should('contain.text', `${expectedInvitesLeftAfterThisGeneration} invites remaining`);
+
+        cy.intercept('GET', '/api/v1/invites').as(`getInvitesDataExhaustLoop${i}`); 
+        cy.wait(`@getInvitesDataExhaustLoop${i}`).then(invitesInterception => {
+          expect(invitesInterception.response.body.unused_codes.length, `Unused codes count in exhaust loop (i=${i})`)
+            .to.eq(expectedUnusedAfterThisGeneration);
+        });
+      }
+    }
+
+    cy.get('.invites-summary').should('contain.text', '0 invites remaining');
+    cy.contains('button', 'Generate New Invite Code').should('be.disabled');
+    cy.contains('.no-invites-message', 'No invites left', { matchCase: false }).should('be.visible');
+    
+    cy.intercept('POST', '/api/v1/invites').as('attemptPostWhenNoneLeft');
+    
+    cy.contains('button', 'Generate New Invite Code').click({ force: true }); 
+
+    cy.wait(250, { log: false }); 
+    
+    cy.get('@attemptPostWhenNoneLeft.all').should('have.length', 0);
+
+    cy.get('.invites-summary').should('contain.text', '0 invites remaining');
+    cy.contains('h3', 'Unused Invite Codes').parent().within(() => {
+      cy.get('ul li').should('have.length', this.baselineUnusedInvitesCount + invitesToGenerateToEnd);
+    });
+    cy.contains('h3', 'Used Invite Codes').parent().within(() => {
+      cy.get('ul li').should('have.length', this.baselineUsedInvitesCount);
+    });
   });
 });

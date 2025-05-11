@@ -4,6 +4,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from models import db, User, InviteCode
+from extensions import login_manager
 
 # --- Field Definitions ---
 
@@ -27,12 +28,12 @@ manage_invites_response_fields = {
 }
 
 class InviteResource(Resource):
-    # @login_required # Remove decorator
+    # @login_required # Remove decorator from class if any
     # Removed marshal_with for GET temporarily due to URL generation complexity
+    @login_required # Explicitly add to GET
     def get(self):
-        # <<< Manual authentication check >>>
-        if not current_user.is_authenticated:
-            return login_manager.unauthorized()
+        # if not current_user.is_authenticated: # Remove manual check
+        #     return login_manager.unauthorized()
         # Logic from manage_invites GET
         unused_codes = InviteCode.query.filter_by(issuer_id=current_user.id, is_used=False).all()
         used_codes = InviteCode.query.filter_by(issuer_id=current_user.id, is_used=True).join(User, InviteCode.used_by_id == User.id).options(joinedload(InviteCode.used_by_user)).all()
@@ -69,38 +70,21 @@ class InviteResource(Resource):
             'invites_left': invites_left_value
         }
 
-    # @login_required # Remove decorator
+    @login_required # Explicitly add to POST
     @marshal_with(invite_code_fields) # Can marshal the newly created code
     def post(self):
-        if not current_user.is_authenticated:
-            return current_app.login_manager.unauthorized()
+        # if not current_user.is_authenticated: # Remove manual check
+        #     return login_manager.unauthorized()
             
-        # TODO: This should primarily rely on current_app.config.get('TESTING') being true.
-        # Ensure the Flask backend is started with FLASK_CONFIG=testing for reliable test behavior.
-        ran_testing_specific_invite_grant = False
-        if current_user.invites_left <= 0:
-            if current_app.config.get('TESTING') or current_user.username == 'testuser':
-                current_user.invites_left = 5 # Grant invites for 'testuser' or if in testing mode
-                db.session.add(current_user)
-                # Commit this change immediately so the subsequent decrement is on the new value
-                try:
-                    db.session.commit()
-                    ran_testing_specific_invite_grant = True
-                    print(f"INFO: Granted 5 invites to {current_user.username} for testing.")
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"ERROR: Could not commit emergency invite grant for {current_user.username}: {e}")
-                    # If this commit fails, the original problem of no invites might persist
-            else:
-                # Not in testing mode and not 'testuser', so enforce invite limits strictly
-                abort(400, message="You have no invites left.")
-        
-        # If we just granted invites, the current_user.invites_left is now 5.
-        # If we didn't grant (because they had some, or it's not testuser/testing mode and they had none), 
-        # it proceeds with their current invite count.
-        # However, if the grant happened BUT the commit failed, this check is important.
-        if not ran_testing_specific_invite_grant and current_user.invites_left <= 0:
-             abort(400, message="You have no invites left (post-check).")
+        user_id = current_user.id
+        # Fetch the user again to ensure we have the latest invites_left count
+        # This is important if other operations might change it within the same session
+        # fresh_user = User.query.get(user_id) # Using Session.get() is preferred in SQLAlchemy 2.0
+        fresh_user = db.session.get(User, user_id)
+
+        if fresh_user.invites_left <= 0:
+            # return {'message': 'No invites left to generate'}, 400 # Old way
+            abort(400, message='No invites left to generate') # Use abort
 
         new_code = InviteCode(issuer_id=current_user.id)
         current_user.invites_left -= 1
@@ -114,4 +98,4 @@ class InviteResource(Resource):
         except Exception as e:
             db.session.rollback()
             print(f"Error generating invite code: {e}")
-            abort(500, message="Error generating invite code.") 
+            abort(500, message="Error generating invite code.")
