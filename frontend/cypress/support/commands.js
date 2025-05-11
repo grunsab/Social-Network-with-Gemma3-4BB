@@ -251,17 +251,25 @@ Cypress.Commands.add('ensureUserExists', ({ username, email, password, inviteCod
         method: 'POST',
         url: '/api/v1/invites', // Endpoint to generate an invite code
       }).then((inviteResponse) => {
-        expect(inviteResponse.status).to.eq(201);
-        if (inviteResponse.body.code) {
-          generatedInviteCode = inviteResponse.body.code;
-        } else if (typeof inviteResponse.body === 'string') {
-          generatedInviteCode = inviteResponse.body;
+        if (inviteResponse.status === 201) {
+          if (inviteResponse.body.code) {
+            generatedInviteCode = inviteResponse.body.code;
+          } else if (typeof inviteResponse.body === 'string') {
+            generatedInviteCode = inviteResponse.body;
+          } else {
+            generatedInviteCode = inviteResponse.body?.invite?.code || inviteResponse.body?.data?.code;
+          }
+          if (!generatedInviteCode) {
+            // This case should ideally not happen if status is 201 and backend guarantees a code
+            throw new Error('ensureUserExists: Invite generation API responded with 201 but no code was found.');
+          }
+        } else if (inviteResponse.status === 400 && inviteResponse.body.message && inviteResponse.body.message.toLowerCase().includes('no invites left to generate')) {
+          throw new Error(`ensureUserExists: 'testuser' has no invites left to generate for user '${username}'. Backend message: ${inviteResponse.body.message}`);
         } else {
-          generatedInviteCode = inviteResponse.body?.invite?.code || inviteResponse.body?.data?.code;
+          // Handle other unexpected errors during invite generation
+          throw new Error(`ensureUserExists: Failed to generate invite code using 'testuser'. API responded with ${inviteResponse.status}: ${JSON.stringify(inviteResponse.body)}`);
         }
-        if (!generatedInviteCode) {
-          throw new Error('ensureUserExists: Could not extract generated invite code.');
-        }
+
         cy.log(`Generated invite code: ${generatedInviteCode}`);
         cy.logout(); // Logout the 'testuser'
       }).then(() => {

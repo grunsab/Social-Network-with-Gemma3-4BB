@@ -21,7 +21,7 @@ from flask_cors import CORS # Import CORS
 from extensions import db, login_manager, migrate
 # Import models here if they don't depend on the app instance directly at import time
 # If models.py imports 'app', this needs further adjustment.
-from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy, Ampersound
+from models import User, Post, Comment, FriendRequest, InviteCode, UserInterest, PostPrivacy, Ampersound, UserType
 
 # Import Resources AFTER defining configurations and extensions
 from resources.auth import UserRegistration, UserLogin, UserLogout
@@ -38,6 +38,9 @@ from resources.image_generation import ImageGenerationResource # Added import
 from resources.ampersound import AmpersoundListResource, AmpersoundResource, MyAmpersoundsResource, AmpersoundSearchResource # Added Ampersound resources
 from resources.admin import AdminAmpersoundApprovalList, AdminAmpersoundApprovalAction # Added Admin Ampersound resources
 from utils import generate_s3_file_url # Import the utility function
+
+# Import for password hashing if not already globally available in this scope
+from werkzeug.security import generate_password_hash
 
 # Load environment variables early
 load_dotenv()
@@ -479,6 +482,68 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
             else:
                 return jsonify({"message": "Invalid file."}), 400
             
+        if app.config.get('TESTING', False) or app.config.get('DEBUG', False):
+            @app.route('/api/v1/test-setup/reset-user-state', methods=['POST'])
+            def reset_user_state_endpoint():
+                try:
+                    data = request.get_json()
+                    if not data:
+                        return jsonify({"message": "Request body must be JSON"}), 400
+
+                    username = data.get('username')
+                    desired_state = data.get('desired_state')
+
+                    if not username or not desired_state:
+                        return jsonify({"message": "Missing username or desired_state"}), 400
+
+                    user = User.query.filter_by(username=username).first()
+                    if not user:
+                        if username == 'testuser': # Only auto-create testuser
+                            user = User(username=username, email=f"{username}@example.com")
+                            db.session.add(user)
+                        else:
+                            return jsonify({"message": f"User {username} not found."}), 404
+                    
+                    # Update password (hash it!)
+                    if 'password' in desired_state:
+                        user.password_hash = generate_password_hash(
+                            desired_state['password'],
+                            method='pbkdf2:sha256'  # Explicitly set hashing method
+                        )
+
+                    if 'invites_left' in desired_state:
+                        user.invites_left = desired_state['invites_left']
+                    
+                    # Handle user_type if provided, defaulting to USER
+                    if 'user_type' in desired_state:
+                        try:
+                            user_type_enum = UserType[desired_state['user_type'].upper()]
+                            user.user_type = user_type_enum
+                        except KeyError:
+                            # Keep existing or default if invalid type provided
+                            pass # Or return a 400 error
+                    elif not user.user_type: # If newly created and not set
+                        user.user_type = UserType.USER
+
+                    # Handle is_active conceptually - Flask-Login's UserMixin handles this by default as True
+                    # If you add an 'is_active' boolean field to your User model, you can set it here:
+                    # if 'is_active' in desired_state and hasattr(user, 'is_active'):
+                    # user.is_active = desired_state['is_active']
+                    
+                    # Example: Clear posts for testuser (if needed for clean state)
+                    # if username == 'testuser':
+                    #     Post.query.filter_by(user_id=user.id).delete()
+                    #     InviteCode.query.filter_by(issuer_id=user.id).delete() # Also clear issued invite codes
+
+                    db.session.commit()
+                    app.logger.info(f"Test setup: User '{username}' state reset.")
+                    return jsonify({"message": f"User {username} state reset successfully"}), 200
+
+                except Exception as e:
+                    db.session.rollback()
+                    app.logger.error(f"Error in reset_user_state_endpoint: {str(e)}")
+                    return jsonify({"message": "Internal server error during state reset", "error": str(e)}), 500
+
         return app # Return the app instance if setup is successful
     except Exception as e: # Catch exceptions during app creation
         print(f"CRITICAL ERROR during Flask app creation (config: {config_name}): {e}")
@@ -492,22 +557,17 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
 application = create_app(os.getenv('FLASK_CONFIG', 'production'))
 
 if __name__ == '__main__':
-    # When running directly (e.g., python app.py), use 'default' (DevelopmentConfig)
-    # if FLASK_CONFIG is not set. This allows easy local development.
-    # The 'PORT' env var is used by Heroku, so it's good to include.
-    # Host '0.0.0.0' is also good practice for containerized environments.
-    config_name_for_run = os.getenv('FLASK_CONFIG') or 'default'
-    app_for_run = create_app(config_name_for_run)
-    
-    # Verify app was created successfully
-    if app_for_run is None:
-        print("ERROR: Failed to create Flask application")
-        sys.exit(1)
-    
-    # Heroku dynamically assigns a port, so use PORT environment variable.
-    # Default to 5000 for local development if PORT is not set.
-    port = int(os.environ.get("PORT", 5000))
-    
-    # Run the app
-    app_for_run.run(debug=app_for_run.config['DEBUG'], host='0.0.0.0', port=port)
+    # Use the 'config_name' from environment variable or default to 'development'
+    config_name = os.environ.get('FLASK_CONFIG', 'development')
+    app = create_app(config_name)
+
+    # Define host and port, allowing overrides from environment variables
+    host = os.environ.get('FLASK_RUN_HOST', '127.0.0.1')
+    try:
+        port = int(os.environ.get('FLASK_RUN_PORT', '5001'))
+    except ValueError:
+        port = 5001 # Default port if parsing fails
+
+    print(f"INFO: Starting Flask app with '{config_name}' configuration on {host}:{port}")
+    app.run(host=host, port=port)
 

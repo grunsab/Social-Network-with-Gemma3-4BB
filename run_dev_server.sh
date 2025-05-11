@@ -8,7 +8,7 @@ export FLASK_DEBUG=1
 export FLASK_CONFIG=development
 
 # Set the port for the Flask app
-export PORT=5001
+export PORT=5000
 
 # Run the Flask app
 python app.py

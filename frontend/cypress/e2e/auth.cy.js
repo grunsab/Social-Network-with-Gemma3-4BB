@@ -6,6 +6,7 @@ describe('Authentication Flow', () => {
   });
 
   it('should allow a user to log in successfully', () => {
+    cy.logout(); // Ensure no user is logged in from previous global setup
     // Visit the login page
     cy.visit('/login');
 
