@@ -68,7 +68,7 @@ class FeedResource(Resource):
 
         # Common visibility filter for posts
         # Exclude own posts from the feed
-        not_own_post_filter = Post.user_id != current_user.id
+        # not_own_post_filter = Post.user_id != current_user.id
         visibility_filter = or_(
             Post.privacy == PostPrivacy.PUBLIC,
             and_(
@@ -77,7 +77,7 @@ class FeedResource(Resource):
             )
         )
         combined_filter = and_(
-            not_own_post_filter,
+            #not_own_post_filter,
             visibility_filter
         )
 
