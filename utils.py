@@ -1,4 +1,5 @@
 import re
+import html # Import the html module for escaping
 from models import User, Ampersound
 from sqlalchemy.orm import joinedload
 
@@ -45,6 +46,9 @@ def format_text_with_ampersounds(text_content, author_username):
     if not text_content:
         return text_content
 
+    # 1. Escape the entire original text_content first to prevent XSS from non-ampersand parts.
+    escaped_text_content = html.escape(text_content)
+
     # Regex to find patterns: 
     # 1. &username.soundname (Groups 1 and 2)
     # 2. &soundname (Group 3)
@@ -52,42 +56,51 @@ def format_text_with_ampersounds(text_content, author_username):
     ampersand_pattern = r"&([a-zA-Z0-9_][a-zA-Z0-9_-]*)\.([a-zA-Z0-9_][a-zA-Z0-9_-]+)|&([a-zA-Z0-9_][a-zA-Z0-9_-]+)"
 
     def replace_tag(match):
-        target_username = match.group(1) # Username if &user.sound format
-        sound_name_for_user = match.group(2) # Soundname if &user.sound format
-        single_sound_name = match.group(3) # Soundname if &sound format
+        # The matched tag (e.g., &user.sound) is already HTML-escaped from the initial step.
+        original_escaped_tag = match.group(0)
+
+        target_username_unescaped = match.group(1) # Username if &user.sound format (from original, unescaped input via regex groups)
+        sound_name_for_user_unescaped = match.group(2) # Soundname if &user.sound format (from original, unescaped input via regex groups)
+        single_sound_name_unescaped = match.group(3) # Soundname if &sound format (from original, unescaped input via regex groups)
 
         ampersound_entry = None
-        owner_username = None
-        resolved_sound_name = None
+        db_owner_username = None # Username fetched from DB (trusted)
+        db_resolved_sound_name = None # Sound name fetched from DB or validated against DB (trusted)
 
-        if target_username and sound_name_for_user:
+        if target_username_unescaped and sound_name_for_user_unescaped:
             # Case 1: &username.soundname specified
             ampersound_entry = Ampersound.query.join(User).filter(
-                User.username == target_username,
-                Ampersound.name == sound_name_for_user
+                User.username == target_username_unescaped,
+                Ampersound.name == sound_name_for_user_unescaped
             ).first()
             if ampersound_entry:
-                owner_username = target_username # Username specified is the owner
-                resolved_sound_name = sound_name_for_user
+                db_owner_username = ampersound_entry.user.username # From DB
+                db_resolved_sound_name = ampersound_entry.name # From DB
         
-        elif single_sound_name:
+        elif single_sound_name_unescaped:
             # Case 2: &soundname specified, check for uniqueness
-            query = Ampersound.query.filter(Ampersound.name == single_sound_name)
+            query = Ampersound.query.filter(Ampersound.name == single_sound_name_unescaped)
             count = query.count()
 
             if count == 1:
                 # Globally unique sound name found
                 ampersound_entry = query.options(joinedload(Ampersound.user)).first() # Eager load owner
                 if ampersound_entry and ampersound_entry.user:
-                     owner_username = ampersound_entry.user.username
-                     resolved_sound_name = single_sound_name
+                     db_owner_username = ampersound_entry.user.username # From DB
+                     db_resolved_sound_name = ampersound_entry.name # From DB
             # else: (count is 0 or > 1) - Ambiguous or not found, leave as text
 
         # If we found a valid, resolvable ampersound entry
-        if ampersound_entry and owner_username and resolved_sound_name:
-            return f'<span class="ampersound-tag" data-username="{owner_username}" data-soundname="{resolved_sound_name}">{match.group(0)}</span>' # Display original tag text
+        if ampersound_entry and db_owner_username and db_resolved_sound_name:
+            # Escape the database values before putting them into HTML attributes
+            attr_owner_username = html.escape(db_owner_username, quote=True)
+            attr_resolved_sound_name = html.escape(db_resolved_sound_name, quote=True)
+            
+            # The content of the span is original_escaped_tag, which is already safe.
+            return f'<span class="ampersound-tag" data-username="{attr_owner_username}" data-soundname="{attr_resolved_sound_name}">{original_escaped_tag}</span>'
         else:
-            # Not found, ambiguous, or invalid format - return the original matched text
-            return match.group(0) 
+            # Not found, ambiguous, or invalid format - return the original *escaped* matched text
+            return original_escaped_tag 
 
-    return re.sub(ampersand_pattern, replace_tag, text_content)
+    # Perform substitution on the fully escaped content
+    return re.sub(ampersand_pattern, replace_tag, escaped_text_content)

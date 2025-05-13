@@ -132,13 +132,13 @@ class FriendRequestResource(Resource):
 
 class FriendshipResource(Resource):
     # Add decorator back - Reverted, apply manual check
-    # method_decorators = [login_required]
+    method_decorators = [login_required]
 
     # Unfriend a user (remove friendship)
     def delete(self, user_id):
-        # <<< Manual authentication check >>>
-        if not current_user.is_authenticated:
-            return login_manager.unauthorized()
+        # <<< Manual authentication check >>> - REMOVED, handled by decorator
+        # if not current_user.is_authenticated:
+        #     return login_manager.unauthorized()
 
         user_to_unfriend = User.query.get(user_id)
         if not user_to_unfriend:

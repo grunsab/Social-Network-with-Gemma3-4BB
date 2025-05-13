@@ -1,5 +1,5 @@
 from flask import current_app, request
-from flask_restful import Resource, fields, marshal_with, abort, reqparse
+from flask_restful import Resource, fields, marshal_with, abort, reqparse, marshal
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -22,6 +22,12 @@ author_fields = {
     'id': fields.Integer,
     'username': fields.String,
     'profile_picture': fields.String
+}
+
+# Define sensitive fields shown only to self
+user_profile_fields_self_only = {
+    'email': fields.String,
+    'invites_left': fields.Integer
 }
 
 # <<< Use more complete post fields for profile view >>>
@@ -51,12 +57,10 @@ profile_data_fields = {
 # <<< Define parser for PATCH request >>>
 profile_patch_parser = reqparse.RequestParser()
 profile_patch_parser.add_argument('invites_left', type=int, location='json', help='Number of invites left (optional)')
-profile_patch_parser.add_argument('profile_picture', type=str, location='json', help='URL of profile picture (optional)')
 # Add other editable fields here later if needed (e.g., email, profile_picture)
 
 class ProfileResource(Resource):
     @login_required
-    @marshal_with(profile_data_fields)
     def get(self, username):
         user = User.query.filter_by(username=username).first()
         if not user:
@@ -114,16 +118,22 @@ class ProfileResource(Resource):
         # Adjust user data visibility based on status (optional)
         # e.g., don't show email or invites_left to non-self
         profile_user_data = user
-        if status != 'SELF':
-             # Example: mask sensitive fields if needed
-             # profile_user_data.email = None 
-             # profile_user_data.invites_left = None 
-             pass # For now, return full user object, marshaling handles selection
+        final_user_fields = user_profile_fields.copy() # Start with base fields
+        if status == 'SELF':
+            final_user_fields.update(user_profile_fields_self_only) # Add sensitive fields
+            
+        # Marshal user data explicitly
+        marshaled_user = marshal(profile_user_data, final_user_fields)
+
+        # Marshal other fields (posts, interests)
+        # Note: post marshalling uses FormattedContent which runs the util function
+        marshaled_posts = marshal(filtered_posts, post_fields_for_profile)
+        marshaled_interests = marshal(interests, interest_fields)
 
         return {
-            'user': profile_user_data,
-            'posts': filtered_posts,
-            'interests': interests,
+            'user': marshaled_user, # Use explicitly marshaled user data
+            'posts': marshaled_posts,
+            'interests': marshaled_interests,
             'friendship_status': status,
             'pending_request_id': pending_request_id if status in ['PENDING_SENT', 'PENDING_RECEIVED'] else None # Return ID only if relevant
         } 
@@ -184,10 +194,10 @@ class MyProfileResource(Resource):
             abort(403, message="You cannot modify invites_left.")
 
         # Update profile_picture if provided
-        if args['profile_picture'] is not None:
-            current_user.profile_picture = args['profile_picture']
-            user_updated = True
-            print(f"INFO: Updating profile picture for {current_user.username}")
+        # if args['profile_picture'] is not None:
+        #     current_user.profile_picture = args['profile_picture']
+        #     user_updated = True
+        #     print(f"INFO: Updating profile picture for {current_user.username}")
 
         # Add logic for other editable fields here from parser...
         # if args['email']:

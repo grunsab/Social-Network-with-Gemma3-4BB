@@ -75,6 +75,8 @@ class UserRegistration(Resource):
             return {'message': 'An error occurred during registration.'}, 500 
 
 class UserLogin(Resource):
+    decorators = [current_app.config['limiter'].limit("20 per day")] # Apply rate limit
+
     def post(self):
         data = request.get_json()
         identifier = data.get('identifier') # Can be username or email
@@ -112,14 +114,6 @@ class UserLogin(Resource):
             }, 200
         else:
             return {'message': 'Invalid credentials'}, 401 # Unauthorized
-
-    # Use DELETE method for logout for RESTful convention
-    @login_required # Ensure user is logged in to log out
-    def delete(self):
-        logout_user()
-        # Clear any session data if needed, Flask-Login handles the user session part
-        session.clear() # Example: clear the whole session
-        return {'message': 'Logout successful'}, 200 
 
 class UserLogout(Resource):
     @login_required

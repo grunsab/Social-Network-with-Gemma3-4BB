@@ -34,6 +34,31 @@ class AmpersoundListResource(Resource):
         if file.filename == '':
             return {"message": "No selected file"}, 400
 
+        # <<< START FILE VALIDATION >>>
+        # 1. Check File Size (e.g., 2MB limit)
+        MAX_AUDIO_SIZE = 2 * 1024 * 1024 # 2 MB
+        try:
+             # Check content_length header first (less reliable but quick check)
+             if request.content_length is not None and request.content_length > MAX_AUDIO_SIZE:
+                  return {"message": f"Audio file size exceeds the limit of {MAX_AUDIO_SIZE / 1024 / 1024}MB (based on header)."}, 413
+             # Reliable check: seek to end and tell
+             file.seek(0, 2) # Move cursor to end of file
+             file_size = file.tell()
+             file.seek(0) # Reset cursor to beginning
+             if file_size > MAX_AUDIO_SIZE:
+                  return {"message": f"Audio file size exceeds the limit of {MAX_AUDIO_SIZE / 1024 / 1024}MB."}, 413
+        except Exception as e:
+             # Handle potential issues with file reading/seeking
+             current_app.logger.error(f"Error checking file size for ampersound upload: {e}")
+             return {"message": "Could not verify file size."}, 400
+             
+        # 2. Basic MIME Type Check
+        if not file.mimetype or not file.mimetype.startswith('audio/'):
+             # Allow specific non-standard types if needed, e.g., application/octet-stream if browser fails
+             # Be cautious with allowing generic types.
+             return {"message": f"Invalid file type: '{file.mimetype}'. Only audio files are allowed."}, 400
+        # <<< END FILE VALIDATION >>>
+
         existing_ampersound = Ampersound.query.filter_by(user_id=current_user.id, name=clean_name).first()
         if existing_ampersound:
             return {"message": f"You already have an Ampersound named '{clean_name}'."}, 409

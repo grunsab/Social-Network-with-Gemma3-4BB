@@ -42,8 +42,24 @@ class CommentListResource(Resource):
     @marshal_with(comment_fields) # Use marshal_with for list items
     def get(self, post_id):
         post = Post.query.get_or_404(post_id)
-        # TODO: Add permission check - can the current user view this post?
-        # (Similar logic as in PostResource.get)
+        
+        # --- BEGIN PERMISSION CHECK ---
+        is_author_of_post = post.user_id == current_user.id
+        is_post_public = post.privacy == PostPrivacy.PUBLIC
+        can_view_post = False
+
+        if is_post_public or is_author_of_post:
+            can_view_post = True
+        elif post.privacy == PostPrivacy.FRIENDS:
+            # Assuming current_user has an is_friend method that takes the post's author object or ID
+            if hasattr(current_user, 'is_friend') and post.author:
+                 can_view_post = current_user.is_friend(post.author)
+            # else: Handle case where is_friend method or post.author is not available, though unlikely with proper setup
+
+        if not can_view_post:
+            return {'message': 'You do not have permission to view comments for this post.'}, 403
+        # --- END PERMISSION CHECK ---
+
         comments = Comment.query.filter_by(post_id=post_id).order_by(Comment.timestamp.asc()).all()
         return comments # Marshal list of comments
 
@@ -52,8 +68,22 @@ class CommentListResource(Resource):
     @marshal_with(comment_fields)
     def post(self, post_id):
         post = Post.query.get_or_404(post_id)
-        # TODO: Add permission check - can the current user comment on this post?
+
+        # --- BEGIN PERMISSION CHECK ---
+        is_author_of_post = post.user_id == current_user.id
+        is_post_public = post.privacy == PostPrivacy.PUBLIC
+        can_comment_on_post = False
+
+        if is_post_public or is_author_of_post:
+            can_comment_on_post = True
+        elif post.privacy == PostPrivacy.FRIENDS:
+            if hasattr(current_user, 'is_friend') and post.author:
+                can_comment_on_post = current_user.is_friend(post.author)
         
+        if not can_comment_on_post:
+            return {'message': 'You do not have permission to comment on this post.'}, 403
+        # --- END PERMISSION CHECK ---
+
         args = comment_parser.parse_args()
         content = args['content']
 

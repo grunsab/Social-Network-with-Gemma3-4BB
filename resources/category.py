@@ -8,6 +8,7 @@ import os
 import math
 
 from models import db, User, Post, PostCategoryScore, PostPrivacy, FriendRequest, FriendRequestStatus
+from resources.post import FormattedContent # Import FormattedContent
 
 # --- Field definitions (Reuse from other resources or define here) ---
 author_fields = {
@@ -18,7 +19,7 @@ author_fields = {
 
 post_category_fields = {
     'id': fields.Integer,
-    'content': fields.String,
+    'content': FormattedContent(attribute=lambda x: x), # Use FormattedContent for safety/consistency
     'image_url': fields.String,
     'timestamp': fields.DateTime(dt_format='iso8601'),
     'privacy': fields.String(attribute='privacy.name'), 

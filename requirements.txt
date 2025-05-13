@@ -15,3 +15,4 @@ Flask-Restful
 pytest
 pytest-flask
 Flask-CORS # Add Flask-CORS for handling Cross-Origin Resource Sharing
+Flask-Limiter # Add Flask-Limiter for rate limiting

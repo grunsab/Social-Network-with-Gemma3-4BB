@@ -14,6 +14,12 @@ from models import db, Post, User, PostCategoryScore, UserImageGenerationStats
 # --- Parser for image generation ---
 image_gen_parser = reqparse.RequestParser()
 image_gen_parser.add_argument('prompt', type=str, required=True, help='Prompt for image generation cannot be blank')
+image_gen_parser.add_argument(
+    'prompt', 
+    type=lambda x: x if len(x) <= 500 else abort(400, message="Prompt cannot exceed 500 characters."), 
+    required=True, 
+    help='Prompt for image generation (max 500 characters)'
+)
 
 class ImageGenerationResource(Resource):
     def _get_r2_file_url(self, app_config, s3_key):

@@ -16,6 +16,8 @@ import mimetypes
 from werkzeug.utils import secure_filename
 import re # Import regular expression module
 from flask_cors import CORS # Import CORS
+from flask_limiter import Limiter # Import Limiter
+from flask_limiter.util import get_remote_address # Import default key function
 
 # Import extensions and models AFTER defining configurations
 from extensions import db, login_manager, migrate
@@ -47,7 +49,7 @@ load_dotenv()
 
 # Define base configuration class
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'a_very_secret_key')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DEBUG = False
     TESTING = False
@@ -74,6 +76,14 @@ class Config:
     @staticmethod
     def init_app(app):
         # Placeholder for config-specific initialization if needed later
+        
+        # Secure SECRET_KEY handling
+        if not app.config.get('SECRET_KEY') and not app.config.get('DEBUG') and not app.config.get('TESTING'):
+             raise ValueError("ERROR: SECRET_KEY is not set in environment for production/non-debug mode.")
+        
+        # You could add a check for a specific weak default key here too if needed,
+        # but requiring it to be set at all outside of debug/test is a good start.
+        
         pass
 
 # Define development configuration
@@ -294,6 +304,17 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
         login_manager.init_app(app)
         migrate.init_app(app, db)
 
+        # Initialize Flask-Limiter
+        limiter = Limiter(
+            get_remote_address, # Use the client's IP address as the key
+            app=app,
+            default_limits=["200 per day", "50 per hour"], # Default limits for all routes (optional)
+            storage_uri="memory://", # Use in-memory storage (consider Redis/Memcached for production)
+            # strategy="fixed-window" # Optional: Define strategy (fixed-window, moving-window)
+        )
+        app.config['RATELIMIT_HEADERS_ENABLED'] = True # Add rate limit headers to responses
+        app.config['limiter'] = limiter # Store limiter instance in app config for access elsewhere
+
         # Initialize Flask-Restful AFTER app is created
         api = Api(app)
 
@@ -434,6 +455,10 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
         @app.route('/api/v1/profiles/upload_picture', methods=['POST'])
         @login_required
         def upload_profile_picture():
+            MAX_CONTENT_LENGTH = 5 * 1024 * 1024 # 5 MB limit
+            if request.content_length is not None and request.content_length > MAX_CONTENT_LENGTH:
+                 return jsonify({"message": f"File size exceeds the limit of {MAX_CONTENT_LENGTH / 1024 / 1024}MB."}), 413 # Payload Too Large
+
             if 'file' not in request.files:
                 return jsonify({"message": "No file part"}), 400
             
