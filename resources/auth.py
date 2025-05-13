@@ -3,6 +3,7 @@ from flask_restful import Resource
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, InviteCode # Import InviteCode
 from flask_login import login_user, logout_user, login_required
+from extensions import limiter # Import the limiter instance
 import os
 
 class UserRegistration(Resource):
@@ -75,7 +76,8 @@ class UserRegistration(Resource):
             return {'message': 'An error occurred during registration.'}, 500 
 
 class UserLogin(Resource):
-    decorators = [current_app.config['limiter'].limit("20 per day")] # Apply rate limit
+    # Apply rate limit using method_decorators and the imported limiter
+    method_decorators = {'post': [limiter.limit("20 per day")]}
 
     def post(self):
         data = request.get_json()
