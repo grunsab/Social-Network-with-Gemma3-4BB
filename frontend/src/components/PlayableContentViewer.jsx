@@ -98,7 +98,7 @@ const PlayableContentViewer = ({ htmlContent }) => {
             }
 
             try {
-                const response = await fetch(`/ampersounds/${username}/${soundname}`);
+                const response = await fetch(`/api/v1/ampersounds/${username}/${soundname}`);
                 if (!response.ok) {
                     const errData = await response.json();
                     console.error('[PlayableContentViewer] handleAmpersoundClick: Fetch error:', errData.message);

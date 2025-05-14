@@ -15,4 +15,5 @@ Flask-Restful
 pytest
 pytest-flask
 Flask-CORS # Add Flask-CORS for handling Cross-Origin Resource Sharing
-Flask-Limiter # Add Flask-Limiter for rate limiting
+Flask-Limiter==3.5.0
+yt-dlp>=2023.12.30 # Added for YouTube audio extraction

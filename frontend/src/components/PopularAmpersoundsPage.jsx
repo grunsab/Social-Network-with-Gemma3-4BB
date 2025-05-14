@@ -74,7 +74,7 @@ const PopularAmpersoundsPage = () => {
 
         try {
             // Fetch the sound URL AND increment count via the backend endpoint
-            const response = await fetch(`/ampersounds/${sound.user.username}/${sound.name}`, {
+            const response = await fetch(`/api/v1/ampersounds/${sound.user.username}/${sound.name}`, {
                  credentials: 'include'
             });
              if (!response.ok) {

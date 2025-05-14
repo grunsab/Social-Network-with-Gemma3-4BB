@@ -20,6 +20,7 @@ import FriendRequests from './components/FriendRequests'; // Import FriendReques
 import PopularAmpersoundsPage from './components/PopularAmpersoundsPage'; // Import new page
 import Notifications from './components/Notifications'; // Import Notifications
 import SinglePostPage from './components/SinglePostPage'; // Import SinglePostPage
+import CreateAmpersoundFromYoutubePage from './components/pages/CreateAmpersoundFromYoutubePage'; // Import the new page
 import './App.css';
 import './hooks/Autocomplete.css'; // Import autocomplete styles
 import Spinner from './components/Spinner'; // Import Spinner
@@ -94,6 +95,9 @@ function App() {
                 <NavLink to="/friend-requests" className={({ isActive }) => isActive ? "active" : ""}>Friend Requests</NavLink>
               </li>
               <li>
+                <NavLink to="/create-ampersound-youtube" className={({ isActive }) => isActive ? "active" : ""}>Create Ampersound (YouTube)</NavLink>
+              </li>
+              <li>
                 <NavLink to="/notifications" className={({ isActive }) => isActive ? "active" : ""}>
                   Notifications{unreadCount > 0 && (
                     <span style={{ backgroundColor: 'red', color: '#fff', borderRadius: '50%', padding: '0.2rem 0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem' }}>
@@ -137,6 +141,7 @@ function App() {
              <Route path="/friend-requests" element={<FriendRequests />} />
              <Route path="/notifications" element={<Notifications />} />
              <Route path="/posts/:postId" element={<SinglePostPage />} />
+             <Route path="/create-ampersound-youtube" element={<CreateAmpersoundFromYoutubePage />} /> {/* New protected route */}
           </Route>
           
            {/* Optional: Catch-all route for 404 */}
