@@ -66,7 +66,7 @@ function Profile() {
             setLoadingAmpersounds(true);
             setErrorAmpersounds('');
             try {
-                const response = await fetch('/api/v1/ampersounds/my_sounds', {
+                const response = await fetch('/api/v1/ampersounds/my', {
                     credentials: 'include' // For session cookie
                 });
                 if (!response.ok) {
