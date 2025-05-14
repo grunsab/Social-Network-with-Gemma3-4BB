@@ -309,7 +309,7 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
         limiter = Limiter(
             get_remote_address, # Use the client's IP address as the key
             app=app,
-            default_limits=["200 per day", "50 per hour"], # Default limits for all routes (optional)
+            default_limits=["20000 per day", "5000 per hour"], # Default limits for all routes (optional)
             storage_uri="memory://", # Use in-memory storage (consider Redis/Memcached for production)
             # strategy="fixed-window" # Optional: Define strategy (fixed-window, moving-window)
         )
