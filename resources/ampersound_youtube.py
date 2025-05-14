@@ -8,6 +8,7 @@ from flask_restful import Resource, reqparse
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
+from cryptography.fernet import Fernet
 
 from models import db, Ampersound, AmpersoundStatus
 from utils import generate_s3_file_url
@@ -50,14 +51,50 @@ class AmpersoundFromYoutubeResource(Resource):
             current_app.logger.error("S3 client not configured.")
             return {"message": "File storage (S3) is not configured on the server."}, 500
 
+        decrypted_cookie_temp_file = None
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 temp_filename_template = os.path.join(tmpdir, f"ampersound_extract_%(id)s.%(ext)s")
                 
+                # Get encrypted cookie file path from app config
+                encrypted_cookie_file_path = os.environ.get('YTDLP_COOKIES_FILE_PATH')
+                decryption_key = os.environ.get('COOKIE_DECRYPTION_KEY')
+
+                yt_dlp_common_args = ['-g', '-x', '--audio-format', 'mp3']
+                temp_decrypted_cookie_path = None
+
+                if encrypted_cookie_file_path and decryption_key:
+                    if os.path.exists(encrypted_cookie_file_path):
+                        try:
+                            fernet_obj = Fernet(decryption_key.encode())
+                            with open(encrypted_cookie_file_path, "rb") as f_encrypted:
+                                encrypted_data = f_encrypted.read()
+                            decrypted_data = fernet_obj.decrypt(encrypted_data)
+                            
+                            # Create a named temporary file for the decrypted cookies
+                            # This temp file will be created outside the main tmpdir to ensure it's cleaned up separately
+                            decrypted_cookie_temp_file = tempfile.NamedTemporaryFile(delete=False, mode='wb', suffix='.txt', prefix='decrypted_cookies_')
+                            decrypted_cookie_temp_file.write(decrypted_data)
+                            temp_decrypted_cookie_path = decrypted_cookie_temp_file.name
+                            decrypted_cookie_temp_file.close() # Close it so yt-dlp can read it
+
+                            current_app.logger.info(f"Successfully decrypted cookies to {temp_decrypted_cookie_path}")
+                            yt_dlp_common_args.extend(['--cookies', temp_decrypted_cookie_path])
+                        except InvalidToken:
+                            current_app.logger.error("Failed to decrypt cookie file: Invalid token (likely wrong key or corrupted file). Proceeding without cookies.")
+                        except Exception as e:
+                            current_app.logger.error(f"Error decrypting or writing cookie file: {e}. Proceeding without cookies.")
+                    else:
+                        current_app.logger.warning(f"Encrypted cookie file specified but not found: {encrypted_cookie_file_path}. Proceeding without cookies.")
+                elif encrypted_cookie_file_path and not decryption_key:
+                    current_app.logger.warning("Cookie file path is configured, but COOKIE_DECRYPTION_KEY environment variable is not set. Proceeding without cookies.")
+                else:
+                    current_app.logger.info("No encrypted cookie file path configured or decryption key missing. Proceeding without cookies.")
+
                 # Step 1: Get the direct audio stream URL using yt-dlp
                 get_url_command = [
                     'yt-dlp',
-                    '-g', '-x', '--audio-format', 'mp3',
+                    *yt_dlp_common_args,
                     youtube_url
                 ]
                 current_app.logger.info(f"Executing yt-dlp get URL command: {' '.join(get_url_command)}")
@@ -68,7 +105,7 @@ class AmpersoundFromYoutubeResource(Resource):
                     current_app.logger.error(f"yt-dlp get URL error: {stderr_get_url.decode('utf-8', 'ignore')}")
                     return {"message": f"Error getting audio stream URL. Details: {stderr_get_url.decode('utf-8', 'ignore')[:200]}"}, 500
                 
-                audio_stream_url = audio_stream_url_raw.decode('utf-8').strip().split('\n')[0] # Get the first URL if multiple are returned for different formats
+                audio_stream_url = audio_stream_url_raw.decode('utf-8').strip().split('\n')[0]
                 if not audio_stream_url:
                     current_app.logger.error(f"yt-dlp did not return an audio stream URL. stdout: {audio_stream_url_raw.decode('utf-8', 'ignore')}, stderr: {stderr_get_url.decode('utf-8', 'ignore')}")
                     return {"message": "Could not retrieve a direct audio stream from the video."}, 500
@@ -76,8 +113,6 @@ class AmpersoundFromYoutubeResource(Resource):
                 current_app.logger.info(f"Retrieved audio stream URL: {audio_stream_url}")
 
                 # Step 2: Use ffmpeg to download and cut the segment
-                # Output to a named temporary file within the directory
-                # Using a unique filename to avoid clashes if multiple requests happen
                 unique_id = uuid.uuid4()
                 extracted_audio_filename = f"extracted_audio_{unique_id}.mp3"
                 extracted_audio_path_temp = os.path.join(tmpdir, extracted_audio_filename)
@@ -85,12 +120,12 @@ class AmpersoundFromYoutubeResource(Resource):
                 ffmpeg_command = [
                     'ffmpeg',
                     '-ss', str(start_time),
-                    '-i', audio_stream_url, # Input URL from yt-dlp
-                    '-to', str(end_time),   # Specify end time for cutting
-                    '-c:a', 'libmp3lame',   # Specify MP3 codec
-                    '-b:a', '128k',         # Audio bitrate
-                    '-vn',                  # No video
-                    '-y',                   # Overwrite output file if it exists
+                    '-i', audio_stream_url,
+                    '-to', str(end_time),
+                    '-c:a', 'libmp3lame',
+                    '-b:a', '128k',
+                    '-vn',
+                    '-y',
                     extracted_audio_path_temp
                 ]
                 
@@ -100,25 +135,21 @@ class AmpersoundFromYoutubeResource(Resource):
 
                 if process_ffmpeg.returncode != 0:
                     current_app.logger.error(f"ffmpeg error: {stderr.decode('utf-8', 'ignore')}")
-                    # More specific error checking for ffmpeg can be added here
                     return {"message": f"Error processing audio with ffmpeg. Details: {stderr.decode('utf-8', 'ignore')[:200]}"}, 500
 
-                # Find the created file (now we know its exact name)
                 extracted_audio_path = extracted_audio_path_temp
                 
-                if not os.path.exists(extracted_audio_path): # Should exist if ffmpeg succeeded
+                if not os.path.exists(extracted_audio_path):
                     current_app.logger.error(f"Extracted audio file {extracted_audio_path} not found in {tmpdir} after ffmpeg. stdout: {stdout.decode()}, stderr: {stderr.decode()}")
                     return {"message": "Failed to retrieve processed audio file."}, 500
 
                 file_size = os.path.getsize(extracted_audio_path)
-                MAX_AUDIO_SIZE = 5 * 1024 * 1024 # 5 MB limit for extracted audio
-                if file_size == 0: # Check if the file is empty (e.g. if duration was too short or cut failed)
+                MAX_AUDIO_SIZE = 5 * 1024 * 1024
+                if file_size == 0:
                     return {"message": "Processed audio is empty. Check start/end times or video segment."}, 400
                 if file_size > MAX_AUDIO_SIZE:
                     return {"message": f"Processed audio file size ({file_size // 1024}KB) exceeds the limit of {MAX_AUDIO_SIZE / 1024 / 1024}MB."}, 413
 
-
-                # Upload to S3
                 s3_filename = f"ampersounds/{current_user.id}/{clean_name}.mp3"
                 s3_bucket = current_app.config['S3_BUCKET']
                 
@@ -135,9 +166,9 @@ class AmpersoundFromYoutubeResource(Resource):
                 ampersound = Ampersound(
                     user_id=current_user.id,
                     name=clean_name,
-                    file_path=s3_filename, # Store S3 key
+                    file_path=s3_filename,
                     privacy=privacy,
-                    status=AmpersoundStatus.PENDING_APPROVAL # Default status
+                    status=AmpersoundStatus.PENDING_APPROVAL
                 )
                 db.session.add(ampersound)
                 db.session.commit()
@@ -149,16 +180,14 @@ class AmpersoundFromYoutubeResource(Resource):
                     "ampersound_id": ampersound.id,
                     "status": ampersound.status.value
                 }, 201
-
         except IntegrityError as e:
             db.session.rollback()
             current_app.logger.error(f"Database integrity error: {e}")
-            # This might happen if a race condition occurs with the name check, though unlikely.
             return {"message": "Failed to save Ampersound due to a database conflict (e.g., name already taken)."}, 409
         except subprocess.CalledProcessError as e:
             current_app.logger.error(f"yt-dlp command failed: {e} - stderr: {e.stderr.decode('utf-8', 'ignore') if e.stderr else 'N/A'}")
             return {"message": f"Error during video processing subprocess. Details: {e.stderr.decode('utf-8', 'ignore')[:200] if e.stderr else 'Unknown error'}"}, 500
-        except FileNotFoundError as e: # Catch if yt-dlp or ffmpeg command itself is not found
+        except FileNotFoundError as e:
             current_app.logger.error(f"Command not found (yt-dlp or ffmpeg): {e}")
             if 'yt-dlp' in str(e):
                  return {"message": "Error processing video: yt-dlp utility not found on server."}, 500
@@ -166,4 +195,12 @@ class AmpersoundFromYoutubeResource(Resource):
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Unexpected error creating ampersound from YouTube: {e}", exc_info=True)
-            return {"message": "An unexpected error occurred while creating the Ampersound."}, 500 
+            return {"message": "An unexpected error occurred while creating the Ampersound."}, 500
+        finally:
+            # Ensure the temporary decrypted cookie file is deleted
+            if decrypted_cookie_temp_file and temp_decrypted_cookie_path and os.path.exists(temp_decrypted_cookie_path):
+                try:
+                    os.remove(temp_decrypted_cookie_path)
+                    current_app.logger.info(f"Successfully removed temporary decrypted cookie file: {temp_decrypted_cookie_path}")
+                except Exception as e:
+                    current_app.logger.error(f"Error removing temporary decrypted cookie file {temp_decrypted_cookie_path}: {e}") 
