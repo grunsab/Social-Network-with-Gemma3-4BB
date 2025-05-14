@@ -380,6 +380,7 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
         api.add_resource(AmpersoundFromYoutubeResource, '/api/v1/ampersounds/from_youtube') # New route for YouTube to Ampersound
         api.add_resource(AmpersoundResource, '/api/v1/ampersounds/<int:sound_id>', '/api/v1/ampersounds/<string:username>/<string:sound_name>')
         api.add_resource(MyAmpersoundsResource, '/api/v1/ampersounds/my')
+        api.add_resource(AmpersoundSearchResource, '/api/v1/ampersounds/search')
 
         # Add Admin Ampersound Approval Resources
         api.add_resource(AdminAmpersoundApprovalList, '/api/v1/admin/ampersounds/pending')
