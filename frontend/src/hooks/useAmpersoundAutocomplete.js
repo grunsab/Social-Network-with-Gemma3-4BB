@@ -28,6 +28,7 @@ export function useAmpersoundAutocomplete(textareaRef) {
   // Debounced fetch function
   const debouncedFetchSuggestions = useCallback(
     debounce(async (searchTerm) => {
+      console.log("[AmpersoundAutocomplete] Debounced fetch triggered with searchTerm:", searchTerm);
       if (!searchTerm) {
         setSuggestions([]);
         setShowSuggestions(false);
@@ -39,16 +40,18 @@ export function useAmpersoundAutocomplete(textareaRef) {
         const response = await fetch(`/api/v1/ampersounds/search?q=${encodeURIComponent(searchTerm)}&limit=5`, {
              credentials: 'include'
         });
+        console.log("[AmpersoundAutocomplete] Fetch response status:", response.status, "ok:", response.ok);
         if (!response.ok) {
-            throw new Error('Failed to fetch suggestions');
+            throw new Error(`Failed to fetch suggestions, status: ${response.status}`);
         }
         const data = await response.json();
+        console.log("[AmpersoundAutocomplete] Fetched data:", data);
         setSuggestions(data || []);
-        // Only show if results are found and textarea still has focus or contains the pattern
-        // More complex focus management might be needed here, but let's keep it simple for now
-        setShowSuggestions((data || []).length > 0); 
+        const shouldShow = (data || []).length > 0;
+        setShowSuggestions(shouldShow); 
+        console.log("[AmpersoundAutocomplete] Set suggestions:", data || [], "Set showSuggestions:", shouldShow);
       } catch (err) {
-        console.error("Error fetching ampersound suggestions:", err);
+        console.error("[AmpersoundAutocomplete] Error fetching ampersound suggestions:", err);
         setSuggestions([]);
         setShowSuggestions(false);
       } finally {
