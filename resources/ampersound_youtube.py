@@ -54,46 +54,60 @@ class AmpersoundFromYoutubeResource(Resource):
             with tempfile.TemporaryDirectory() as tmpdir:
                 temp_filename_template = os.path.join(tmpdir, f"ampersound_extract_%(id)s.%(ext)s")
                 
-                # Use yt-dlp to download and extract audio segment
-                # -x: extract audio
-                # --audio-format mp3: specify mp3 output
-                # --audio-quality 5: good quality
-                # -o: output template
-                # --postprocessor-args "ffmpeg_i:-ss <start> -to <end>" : pass arguments to ffmpeg for precise cutting
-                # Note: yt-dlp handles invoking ffmpeg.
-                command = [
+                # Step 1: Get the direct audio stream URL using yt-dlp
+                get_url_command = [
                     'yt-dlp',
-                    '-x', '--audio-format', 'mp3', '--audio-quality', '5',
-                    '-o', temp_filename_template,
-                    '--postprocessor-args', f'ffmpeg_i:-ss {start_time} -to {end_time}',
+                    '-g', '-x', '--audio-format', 'mp3',
                     youtube_url
                 ]
-                
-                current_app.logger.info(f"Executing yt-dlp command: {' '.join(command)}")
-                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                stdout, stderr = process.communicate()
+                current_app.logger.info(f"Executing yt-dlp get URL command: {' '.join(get_url_command)}")
+                process_get_url = subprocess.Popen(get_url_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                audio_stream_url_raw, stderr_get_url = process_get_url.communicate()
 
-                if process.returncode != 0:
-                    current_app.logger.error(f"yt-dlp error: {stderr.decode('utf-8', 'ignore')}")
-                    # Try to find a more specific error message for the user
-                    if "Unsupported URL" in stderr.decode('utf-8', 'ignore'):
-                         return {"message": "Unsupported YouTube URL or video not found."}, 400
-                    if "Video unavailable" in stderr.decode('utf-8', 'ignore'):
-                        return {"message": "Video is unavailable."}, 400
-                    if "ffmpeg" in stderr.decode('utf-8', 'ignore').lower() and "not found" in stderr.decode('utf-8', 'ignore').lower():
-                         current_app.logger.error("FFmpeg not found by yt-dlp.")
-                         return {"message": "Error processing video: FFmpeg utility not found on server."}, 500
-                    return {"message": f"Error processing video. Details: {stderr.decode('utf-8', 'ignore')[:200]}"}, 500
-
-                # Find the created file (yt-dlp replaces %(id)s with video_id, etc.)
-                extracted_audio_path = None
-                for f_name in os.listdir(tmpdir):
-                    if f_name.startswith("ampersound_extract_") and f_name.endswith(".mp3"):
-                        extracted_audio_path = os.path.join(tmpdir, f_name)
-                        break
+                if process_get_url.returncode != 0:
+                    current_app.logger.error(f"yt-dlp get URL error: {stderr_get_url.decode('utf-8', 'ignore')}")
+                    return {"message": f"Error getting audio stream URL. Details: {stderr_get_url.decode('utf-8', 'ignore')[:200]}"}, 500
                 
-                if not extracted_audio_path or not os.path.exists(extracted_audio_path):
-                    current_app.logger.error(f"Extracted audio file not found in {tmpdir} after yt-dlp. stdout: {stdout.decode()}, stderr: {stderr.decode()}")
+                audio_stream_url = audio_stream_url_raw.decode('utf-8').strip().split('\n')[0] # Get the first URL if multiple are returned for different formats
+                if not audio_stream_url:
+                    current_app.logger.error(f"yt-dlp did not return an audio stream URL. stdout: {audio_stream_url_raw.decode('utf-8', 'ignore')}, stderr: {stderr_get_url.decode('utf-8', 'ignore')}")
+                    return {"message": "Could not retrieve a direct audio stream from the video."}, 500
+
+                current_app.logger.info(f"Retrieved audio stream URL: {audio_stream_url}")
+
+                # Step 2: Use ffmpeg to download and cut the segment
+                # Output to a named temporary file within the directory
+                # Using a unique filename to avoid clashes if multiple requests happen
+                unique_id = uuid.uuid4()
+                extracted_audio_filename = f"extracted_audio_{unique_id}.mp3"
+                extracted_audio_path_temp = os.path.join(tmpdir, extracted_audio_filename)
+
+                ffmpeg_command = [
+                    'ffmpeg',
+                    '-ss', str(start_time),
+                    '-i', audio_stream_url, # Input URL from yt-dlp
+                    '-to', str(end_time),   # Specify end time for cutting
+                    '-c:a', 'libmp3lame',   # Specify MP3 codec
+                    '-b:a', '128k',         # Audio bitrate
+                    '-vn',                  # No video
+                    '-y',                   # Overwrite output file if it exists
+                    extracted_audio_path_temp
+                ]
+                
+                current_app.logger.info(f"Executing ffmpeg command: {' '.join(ffmpeg_command)}")
+                process_ffmpeg = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = process_ffmpeg.communicate()
+
+                if process_ffmpeg.returncode != 0:
+                    current_app.logger.error(f"ffmpeg error: {stderr.decode('utf-8', 'ignore')}")
+                    # More specific error checking for ffmpeg can be added here
+                    return {"message": f"Error processing audio with ffmpeg. Details: {stderr.decode('utf-8', 'ignore')[:200]}"}, 500
+
+                # Find the created file (now we know its exact name)
+                extracted_audio_path = extracted_audio_path_temp
+                
+                if not os.path.exists(extracted_audio_path): # Should exist if ffmpeg succeeded
+                    current_app.logger.error(f"Extracted audio file {extracted_audio_path} not found in {tmpdir} after ffmpeg. stdout: {stdout.decode()}, stderr: {stderr.decode()}")
                     return {"message": "Failed to retrieve processed audio file."}, 500
 
                 file_size = os.path.getsize(extracted_audio_path)
