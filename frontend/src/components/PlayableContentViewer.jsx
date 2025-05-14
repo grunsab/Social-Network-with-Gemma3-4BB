@@ -6,6 +6,39 @@ const PlayableContentViewer = ({ htmlContent }) => {
     const [error, setError] = useState(null);
     const audioCacheRef = useRef(new Map());
 
+    console.log('[DEBUG PlayableContentViewer] Initial htmlContent prop:', htmlContent);
+
+    // Pre-process htmlContent to create clickable ampersound spans
+    let processedHtmlContent = htmlContent || ''; // Ensure it's not null/undefined
+
+    // Step 1: Standardize &amp; to & for ampersound patterns
+    console.log('[DEBUG PlayableContentViewer] Before Step 1 processing:', processedHtmlContent);
+    
+    // OLD Step 1 regex: /&amp;(?=([a-zA-Z0-9_.-]+)\.([a-zA-Z0-9_.-]+))/g
+    // In OLD version, callback args were (match, usernameFromLookahead, soundnameFromLookahead) where match was just "&amp;"
+
+    // NEW Step 1 regex: Matches "&amp;username.soundname" directly
+    processedHtmlContent = processedHtmlContent.replace(/&amp;([a-zA-Z0-9_.-]+)\.([a-zA-Z0-9_.-]+)/g, (fullMatchedString, capturedUsername, capturedSoundname) => {
+        console.log(`[DEBUG PlayableContentViewer] Step 1: fullMatchedString='${fullMatchedString}', capturedUsername='${capturedUsername}', capturedSoundname='${capturedSoundname}'`);
+        const replacement = `&${capturedUsername}.${capturedSoundname}`;
+        console.log(`[DEBUG PlayableContentViewer] Step 1: replacing with='${replacement}'`);
+        return replacement;
+    });
+    
+    console.log('[DEBUG PlayableContentViewer] After Step 1 processing:', processedHtmlContent);
+
+    // Step 2: Replace &username.soundname with a span
+    // Regex to find &username.soundname
+    // Assumes username and soundname consist of alphanumeric characters, underscores, hyphens, and dots.
+    const ampersoundRegex = /&([a-zA-Z0-9_.-]+)\.([a-zA-Z0-9_.-]+)/g;
+    
+    processedHtmlContent = processedHtmlContent.replace(ampersoundRegex, (match, username, soundname) => {
+        console.log(`[DEBUG PlayableContentViewer] Step 2: match='${match}', username='${username}', soundname='${soundname}'`);
+        return `<span class="ampersound-tag" data-username="${username}" data-soundname="${soundname}" style="cursor: pointer; color: #007bff; text-decoration: underline;" role="button" tabindex="0" aria-label="Play sound ${soundname} by ${username}">${match}</span>`;
+    });
+
+    console.log('[DEBUG PlayableContentViewer] After Step 2 processing (final for render):', processedHtmlContent);
+
     // Cleanup previous audio element if a new one starts playing or component unmounts
     useEffect(() => {
         return () => {
@@ -18,11 +51,11 @@ const PlayableContentViewer = ({ htmlContent }) => {
     }, [activeAudio]); // Effect runs when activeAudio changes
 
     useEffect(() => {
-        if (!contentRef.current || !htmlContent) {
-            console.log('[PlayableContentViewer] Effect: Skipped (no contentRef or htmlContent)');
+        if (!contentRef.current || !processedHtmlContent) {
+            console.log('[PlayableContentViewer] Effect: Skipped (no contentRef or processedHtmlContent)');
             return;
         }
-        console.log('[PlayableContentViewer] Effect: Running for htmlContent:', htmlContent);
+        console.log('[PlayableContentViewer] Effect: Running for processedHtmlContent:', processedHtmlContent);
 
         setError(null); // Clear previous errors on new content
 
@@ -113,7 +146,7 @@ const PlayableContentViewer = ({ htmlContent }) => {
 
         // Cleanup: remove event listeners when component unmounts or htmlContent changes
         return () => {
-            console.log('[PlayableContentViewer] Effect Cleanup: Removing listeners for htmlContent:', htmlContent);
+            console.log('[PlayableContentViewer] Effect Cleanup: Removing listeners for processedHtmlContent:', processedHtmlContent);
             spans.forEach((span, index) => {
                 console.log(`[PlayableContentViewer] Effect Cleanup: Removing listener from span ${index + 1}/${spans.length}`, span);
                 span.removeEventListener('click', handleAmpersoundClick);
@@ -121,12 +154,12 @@ const PlayableContentViewer = ({ htmlContent }) => {
             // The other useEffect handles activeAudio cleanup on unmount or when activeAudio itself changes.
             // No need to call setActiveAudio(null) here directly as it might interfere with the other effect.
         };
-    }, [htmlContent, activeAudio]); // Rerun effect if htmlContent or activeAudio changes
+    }, [processedHtmlContent, activeAudio]); // MODIFIED: use processedHtmlContent
 
     return (
         <div>
             {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-            <div ref={contentRef} dangerouslySetInnerHTML={{ __html: htmlContent }} />
+            <div ref={contentRef} dangerouslySetInnerHTML={{ __html: processedHtmlContent }} />
         </div>
     );
 };
