@@ -111,6 +111,7 @@ class AmpersoundFromYoutubeResource(Resource):
                     return {"message": "Could not retrieve a direct audio stream from the video."}, 500
 
                 current_app.logger.info(f"Retrieved audio stream URL: {audio_stream_url}")
+                current_app.logger.info(f"Requested start_time: {start_time}, end_time: {end_time}, calculated duration: {duration}")
 
                 # Step 2: Use ffmpeg to download and cut the segment
                 unique_id = uuid.uuid4()
@@ -119,9 +120,9 @@ class AmpersoundFromYoutubeResource(Resource):
 
                 ffmpeg_command = [
                     'ffmpeg',
-                    '-ss', str(start_time),
                     '-i', audio_stream_url,
-                    '-to', str(end_time),
+                    '-ss', str(start_time),
+                    '-t', str(duration),
                     '-c:a', 'libmp3lame',
                     '-b:a', '128k',
                     '-vn',
