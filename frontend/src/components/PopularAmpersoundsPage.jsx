@@ -34,7 +34,7 @@ const PopularAmpersoundsPage = () => {
                 // Credentials needed if this endpoint ever becomes protected,
                 // but for a public listing, it might not be.
                 // For consistency with other fetches that might need it, let's include it.
-                const response = await fetch('/api/v1/ampersounds/', {
+                const response = await fetch('/api/v1/ampersounds', {
                     credentials: 'include' 
                 });
                 if (!response.ok) {
