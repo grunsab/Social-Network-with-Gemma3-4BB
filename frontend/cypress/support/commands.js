@@ -41,22 +41,32 @@ Cypress.Commands.add('login', (usernameOrEmail, password) => {
       }
       expect(interception.response.statusCode, 'Login API call status code').to.eq(200);
       
-      // No need to check cy.url() here if expect already passed, 
-      // as a 401 would fail above and a 200 implies successful page transition by the app
-      // However, explicit redirect check after successful API call is a good practice.
       if (interception.response.statusCode === 200) {
          cy.url({ timeout: 10000 }).should('eq', Cypress.config().baseUrl + '/', 'Should redirect to homepage after login');
       }
     });
-    // Ensure cy.session setup function completes its chain correctly.
-    // Add a final cy command to ensure the chain completes, e.g. a log or a url check if not done above.
-    // cy.url().should(...); // This was part of the original command, let's ensure it's robustly handled.
-    // The cy.url() check is now inside the .then() for the 200 case.
-    cy.log('Login session setup: Successfully completed login attempt flow.'); // Final command in session setup
+    cy.log('Login session setup: Successfully completed login attempt flow.');
 
   }, {
-    cacheAcrossSpecs: true
-    // Removed validate for now to simplify, can be added back later if needed.
+    cacheAcrossSpecs: true,
+    validate() {
+      cy.log('Validating session...');
+      return cy.request({
+        method: 'GET',
+        url: '/api/v1/profiles/me',
+        failOnStatusCode: false
+      }).then((response) => {
+        if (response.status === 200 && response.body && response.body.user) {
+          cy.log('Session is valid via API check.');
+          return cy.wrap(true); // Yield true through Cypress chain
+        }
+        cy.log('Session is invalid or expired via API check, attempting re-login.');
+        // Chain Cypress commands: clear cookies, then yield false
+        return cy.clearCookies({ domain: null }).then(() => {
+          return cy.wrap(false); // Yield false through Cypress chain
+        });
+      });
+    }
   });
 });
 
@@ -79,10 +89,23 @@ Cypress.Commands.add('createPost', ({ content, privacy = 'PUBLIC' }) => {
       privacy: privacy // PUBLIC or FRIENDS
     }
   }).then((response) => {
+    cy.log('[createPost] API Response Status:', response.status);
+    cy.log('[createPost] API Response Body:', JSON.stringify(response.body));
+
     // Check for successful creation (Status 201)
     expect(response.status).to.eq(201);
-    // Yield the created post object to allow chaining
-    cy.wrap(response.body.post);
+
+    // Before yielding, ensure response.body.post exists and is an object
+    if (response.body && typeof response.body === 'object' && response.body.post && typeof response.body.post === 'object') {
+      cy.log('[createPost] Yielding post object:', JSON.stringify(response.body.post));
+      cy.wrap(response.body.post);
+    } else {
+      cy.log('[createPost] WARNING: response.body.post is missing or not an object. Yielding entire response body instead.');
+      cy.log(`[createPost] Full response body was: ${JSON.stringify(response.body)}`);
+      // Yielding the whole body or null/undefined might cause downstream errors if tests expect `post.id`
+      // Consider throwing an error here or making the test that calls this more robust.
+      cy.wrap(response.body); // Or cy.wrap(null) if preferred to signal an issue.
+    }
   });
 });
 
