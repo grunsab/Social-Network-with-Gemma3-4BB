@@ -10,10 +10,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     # You can define specific versions or use a matrix for multiple versions
-    # strategy:
-    #   matrix:
+    strategy:
+      matrix:
         python-version: ['3.9',]
-    #     node-version: ['18.x', '20.x']
 
     steps:
     - name: Checkout repository
@@ -30,65 +29,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-      # If your requirements.txt is in a subdirectory (e.g., ./backend/), 
-      # add/uncomment the following line and adjust the path:
-      # working-directory: ./backend
 
     - name: Run backend tests (pytest)
       run: pytest
-      # If your tests need to be run from a specific directory (e.g., ./backend/),
-      # add/uncomment the following line and adjust the path:
-      # working-directory: ./backend
-
-    # # Frontend (React) Steps
-    # - name: Set up Node.js
-    #   uses: actions/setup-node@v4
-    #   with:
-    #     node-version: '18.x' # TODO: Verify and set your project's Node.js version (LTS recommended)
-    #     cache: 'npm'
-    #     # Path to your frontend's package-lock.json (or yarn.lock)
-    #     cache-dependency-path: frontend/package-lock.json 
-
-    # - name: Install frontend dependencies
-    #   # This step assumes Cypress is listed as a devDependency in your frontend/package.json
-    #   # so that `npm ci` installs Cypress along with other dependencies.
-    #   run: npm ci
-    #   working-directory: ./frontend
-
-    # - name: Build frontend
-    #   run: npm run build
-    #   working-directory: ./frontend
-    #   # Optional: If you want to store your build artifacts (e.g., for deployment later)
-    #   # - name: Upload frontend build artifact
-    #   #   uses: actions/upload-artifact@v4
-    #   #   with:
-    #   #     name: frontend-build
-    #   #     path: frontend/build/ # Adjust to your frontend build output directory
-
-    # - name: Run Cypress tests
-    #   uses: cypress-io/github-action@v6
-    #   with:
-    #     # Specifies the directory where Cypress is located and tests should run
-    #     working-directory: frontend/cypress 
-    #     # Skips `npm ci` by the action, as dependencies (including Cypress)
-    #     # should have been installed in the "Install frontend dependencies" step.
-    #     # Ensure Cypress is a devDependency in frontend/package.json.
-    #     install: false 
-    #     # Command to start your frontend application server for Cypress to test against.
-    #     # Ensure `npm start` in your 'frontend' directory serves your app correctly.
-    #     start: npm start 
-    #     # URL that Cypress will wait for to be responsive before starting tests.
-    #     # Adjust the port if your React app runs on a different one.
-    #     wait-on: 'http://localhost:3000' 
-    #     # wait-on-timeout: 120 # Optional: How long to wait (seconds) for `wait-on` URL
-    #     # browser: chrome # Optional: specify browser (e.g., chrome, firefox, edge)
-    #     # record: true # Optional: Set to true to record to Cypress Dashboard
-    #                   # Requires CYPRESS_RECORD_KEY secret in GitHub repository settings
-    #   #env:
-    #     # Pass any necessary environment variables to Cypress here
-    #     # e.g., CYPRESS_API_URL: ${{ secrets.API_URL }}
-    #     # The cypress-io/github-action sets CI=true by default
-    #     # If your `npm start` in `frontend` serves the static build from `frontend/build`, 
-    #     # ensure it does so on the port specified in `wait-on`.
-    #     # For example, `npm start` script could be: "serve -s build -l 3000"
-    #     # (requires `serve` package: `npm install -g serve` or as dev dependency)
