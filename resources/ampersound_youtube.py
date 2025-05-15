@@ -34,7 +34,7 @@ class AmpersoundFromYoutubeResource(Resource):
             return {"message": "Start time must be before end time."}, 400
         
         duration = end_time - start_time
-        MAX_DURATION = 30 # Max 30 seconds for an ampersound
+        MAX_DURATION = 150 # Max 150 seconds for an ampersound
         if duration > MAX_DURATION:
             return {"message": f"Ampersound duration cannot exceed {MAX_DURATION} seconds." }, 400
 
