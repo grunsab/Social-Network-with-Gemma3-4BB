@@ -131,6 +131,7 @@ function App() {
           <Route path="/login" element={!currentUser ? <Login /> : <Navigate replace to="/" />} />
           <Route path="/register" element={!currentUser ? <Register /> : <Navigate replace to="/" />} />
           <Route path="/popular-ampersounds" element={<PopularAmpersoundsPage />} /> {/* New public route */}
+          <Route path="/posts/:postId" element={<SinglePostPage />} /> {/* Moved from protected to public */}
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
@@ -140,7 +141,6 @@ function App() {
              <Route path="/manage-invites" element={<ManageInvites />} />
              <Route path="/friend-requests" element={<FriendRequests />} />
              <Route path="/notifications" element={<Notifications />} />
-             <Route path="/posts/:postId" element={<SinglePostPage />} />
              <Route path="/create-ampersound-youtube" element={<CreateAmpersoundFromYoutubePage />} /> {/* New protected route */}
           </Route>
           
