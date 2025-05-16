@@ -189,9 +189,12 @@ class PostListResource(Resource):
 
             db.session.commit()
 
-            # Ensure author relationship is loaded for the formatter/marshaller
-            # If not already loaded, this might be needed, or ensure it via options earlier.
-            # For now, assume new_post.author is accessible.
+            # Ensure the object is refreshed from the database session to load all attributes
+            # and relationships correctly before marshalling, especially after a commit.
+            db.session.refresh(new_post)
+            # Optionally, to be absolutely sure relationships like author are loaded if not already:
+            # new_post = Post.query.options(joinedload(Post.author)).get(new_post.id)
+            # However, refresh should typically handle making attributes available.
             
             # Use marshal to format the new_post object with post_fields
             # This will apply the FormattedContent field for ampersounds.
