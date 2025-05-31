@@ -34,7 +34,7 @@ const PopularAmpersoundsPage = () => {
                 // Credentials needed if this endpoint ever becomes protected,
                 // but for a public listing, it might not be.
                 // For consistency with other fetches that might need it, let's include it.
-                const response = await fetch('/api/v1/ampersounds/all', {
+                const response = await fetch('/api/v1/ampersounds', {
                     credentials: 'include' 
                 });
                 if (!response.ok) {
@@ -74,7 +74,7 @@ const PopularAmpersoundsPage = () => {
 
         try {
             // Fetch the sound URL AND increment count via the backend endpoint
-            const response = await fetch(`/ampersounds/${sound.user.username}/${sound.name}`, {
+            const response = await fetch(`/api/v1/ampersounds/${sound.user.username}/${sound.name}`, {
                  credentials: 'include'
             });
              if (!response.ok) {

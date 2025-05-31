@@ -286,41 +286,44 @@ class PostListResource(Resource):
         }
 
 class PostResource(Resource):
-    @login_required
-    @marshal_with(post_fields) # Use marshal_with for single post too
+    @marshal_with(post_fields)
     def get(self, post_id):
-        # Logic for fetching a single post by ID
-        # Check permissions based on privacy and friendship
         post = Post.query.options(
-            joinedload(Post.author), # Eager load author
-            joinedload(Post.category_scores), # Eager load category_scores
-            undefer(Post.comments_count) # Explicitly load comments_count
-        ).get_or_404(post_id)
+            joinedload(Post.author), 
+            undefer(Post.comments_count) # Make sure comments_count is loaded
+        ).get(post_id) # Use .get() and handle not found manually
 
-        # Permission check (simplified example)
-        is_author = post.user_id == current_user.id
-        is_public = post.privacy == PostPrivacy.PUBLIC
-        is_friend = False
-        if not is_public and not is_author:
-            # Check friendship if post is friends-only and user is not author
-            is_friend = current_user.is_friend(post.author) # Assumes is_friend method exists
+        if not post:
+            return {'message': 'Post not found'}, 404
 
-        if not is_public and not is_author and not is_friend:
-             return {'message': 'You do not have permission to view this post'}, 403
+        can_view = False
+        if post.privacy == PostPrivacy.PUBLIC:
+            can_view = True
+        elif current_user.is_authenticated: # Only check friends/own if logged in
+            if post.user_id == current_user.id:
+                can_view = True
+            elif post.privacy == PostPrivacy.FRIENDS:
+                # Check if the post author is a friend of the current_user
+                # Ensure post.author is not None before accessing its attributes or relationships
+                if post.author and (current_user.is_friend(post.author) or post.author == current_user) : # Assuming is_friend method
+                    can_view = True
+        
+        if not can_view:
+            # Differentiate message for logged-in vs anonymous
+            if current_user.is_authenticated:
+                return {'message': 'You do not have permission to view this post.'}, 403
+            else: # Not logged in and post is not public
+                return {'message': 'This post requires login to view or is not public.'}, 401
 
-        # Check if the current user has liked this post
-        # This requires querying the PostLike table
-        from models import PostLike # Import here to avoid circular dependency issues at top level
+        # Manually set is_liked for the current user if logged in
         if current_user.is_authenticated:
-            post.is_liked = db.session.query(PostLike.query.filter(
-                PostLike.user_id == current_user.id,
-                PostLike.post_id == post.id
-            ).exists()).scalar()
+            # Assuming Post model has a method is_liked_by_user(user_id)
+            # or you query PostLike table directly
+            post.is_liked = post.is_liked_by_user(current_user.id) 
         else:
-            post.is_liked = False # Not liked if user is not authenticated
+            post.is_liked = False # Default for anonymous users
 
-        # Return post data (need serialization)
-        return post # Marshal handles the conversion
+        return post
 
     @login_required
     def delete(self, post_id):

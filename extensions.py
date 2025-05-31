@@ -16,7 +16,7 @@ limiter = Limiter(
     key_func=get_remote_address,
     # You might want to adjust default limits or remove them
     # if you prefer defining all limits where they are used.
-    default_limits=["200 per day", "50 per hour"] 
+    default_limits=["20000 per day", "5000 per hour"] 
 )
 
 @event.listens_for(Engine, "connect")

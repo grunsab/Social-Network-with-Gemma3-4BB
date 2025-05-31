@@ -66,9 +66,10 @@ class FriendRequestListResource(Resource):
 
 class FriendRequestResource(Resource):
     # Add decorators back
-    method_decorators = [login_required]
+    # method_decorators = [login_required] # Removed: Apply directly to methods
 
     # Accept or Reject a received friend request
+    @login_required # Applied directly
     @marshal_with(friend_request_fields)
     def put(self, request_id):
         args = friend_request_manage_parser.parse_args()
@@ -112,6 +113,7 @@ class FriendRequestResource(Resource):
             abort(400, message=f"Could not {action} friend request.")
 
     # Cancel a sent friend request
+    @login_required # Applied directly
     def delete(self, request_id):
         friend_request = FriendRequest.query.get_or_404(request_id)
 
@@ -132,9 +134,10 @@ class FriendRequestResource(Resource):
 
 class FriendshipResource(Resource):
     # Add decorator back - Reverted, apply manual check
-    method_decorators = [login_required]
+    # method_decorators = [login_required] # Removed: Apply directly to method
 
     # Unfriend a user (remove friendship)
+    @login_required # Applied directly
     def delete(self, user_id):
         # <<< Manual authentication check >>> - REMOVED, handled by decorator
         # if not current_user.is_authenticated:

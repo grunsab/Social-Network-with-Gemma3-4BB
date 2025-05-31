@@ -189,3 +189,8 @@ Thumbs.db
 
 # Logs
 # *.log # Already present (under Django stuff)
+
+
+# Cookies
+cookies_yt.txt
+*.key

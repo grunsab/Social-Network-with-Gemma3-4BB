@@ -38,6 +38,7 @@ from resources.report import ReportResource, ReportListResource, AdminReportList
 from resources.notification import NotificationListResource, NotificationResource, UnreadCountResource
 from resources.image_generation import ImageGenerationResource # Added import
 from resources.ampersound import AmpersoundListResource, AmpersoundResource, MyAmpersoundsResource, AmpersoundSearchResource # Added Ampersound resources
+from resources.ampersound_youtube import AmpersoundFromYoutubeResource # New resource for YouTube to Ampersound
 from resources.admin import AdminAmpersoundApprovalList, AdminAmpersoundApprovalAction # Added Admin Ampersound resources
 from utils import generate_s3_file_url # Import the utility function
 
@@ -374,12 +375,11 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
         api.add_resource(NotificationListResource, '/api/v1/notifications')
         api.add_resource(NotificationResource, '/api/v1/notifications/<int:notif_id>')
         api.add_resource(UnreadCountResource, '/api/v1/notifications/unread_count')
-        api.add_resource(ImageGenerationResource, '/api/v1/generate_image') # Added image generation resource
-
-        # Add Ampersound Resources
-        api.add_resource(AmpersoundListResource, '/api/v1/ampersounds', '/api/v1/ampersounds/all') # POST to /api/v1/ampersounds, GET to /api/v1/ampersounds/all
-        api.add_resource(AmpersoundResource, '/api/v1/ampersounds/<int:sound_id>', '/ampersounds/<string:username>/<string:sound_name>') # GET, DELETE by id; GET by username/soundname
-        api.add_resource(MyAmpersoundsResource, '/api/v1/ampersounds/my_sounds')
+        api.add_resource(ImageGenerationResource, '/api/v1/generate_image') # Added route for image generation
+        api.add_resource(AmpersoundListResource, '/api/v1/ampersounds')
+        api.add_resource(AmpersoundFromYoutubeResource, '/api/v1/ampersounds/from_youtube') # New route for YouTube to Ampersound
+        api.add_resource(AmpersoundResource, '/api/v1/ampersounds/<int:sound_id>', '/api/v1/ampersounds/<string:username>/<string:sound_name>')
+        api.add_resource(MyAmpersoundsResource, '/api/v1/ampersounds/my')
         api.add_resource(AmpersoundSearchResource, '/api/v1/ampersounds/search')
 
         # Add Admin Ampersound Approval Resources

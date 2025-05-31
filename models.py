@@ -268,6 +268,15 @@ class Post(db.Model):
         .scalar_subquery()
     )
 
+    def is_liked_by_user(self, user_id):
+        """Checks if the post is liked by a specific user."""
+        if not user_id: # Handle anonymous user case
+            return False
+        return db.session.query(PostLike.query.filter(
+            PostLike.user_id == user_id,
+            PostLike.post_id == self.id
+        ).exists()).scalar()
+
     def __repr__(self):
         return f'<Post {self.content[:50]}...>'
 

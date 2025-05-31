@@ -38,26 +38,37 @@ comment_parser.add_argument('content', type=str, required=True, help='Comment co
 
 class CommentListResource(Resource):
     # Get comments for a specific post
-    @login_required
+    # @login_required # Removed for public comment viewing
     @marshal_with(comment_fields) # Use marshal_with for list items
     def get(self, post_id):
         post = Post.query.get_or_404(post_id)
         
         # --- BEGIN PERMISSION CHECK ---
-        is_author_of_post = post.user_id == current_user.id
-        is_post_public = post.privacy == PostPrivacy.PUBLIC
         can_view_post = False
+        is_post_public = post.privacy == PostPrivacy.PUBLIC
 
-        if is_post_public or is_author_of_post:
+        if is_post_public:
             can_view_post = True
-        elif post.privacy == PostPrivacy.FRIENDS:
-            # Assuming current_user has an is_friend method that takes the post's author object or ID
-            if hasattr(current_user, 'is_friend') and post.author:
-                 can_view_post = current_user.is_friend(post.author)
-            # else: Handle case where is_friend method or post.author is not available, though unlikely with proper setup
-
+        elif current_user.is_authenticated: # Checks for logged-in users for non-public posts
+            is_author_of_post = post.user_id == current_user.id
+            if is_author_of_post:
+                can_view_post = True
+            elif post.privacy == PostPrivacy.FRIENDS:
+                # Assuming current_user has an is_friend method that takes the post's author object or ID
+                if hasattr(current_user, 'is_friend') and post.author:
+                     can_view_post = current_user.is_friend(post.author)
+                # else: Handle case where is_friend method or post.author is not available, though unlikely with proper setup
+        
         if not can_view_post:
-            return {'message': 'You do not have permission to view comments for this post.'}, 403
+            # Differentiate message for logged-in vs anonymous if post is not public
+            if not is_post_public and current_user.is_authenticated:
+                 return {'message': 'You do not have permission to view comments for this post.'}, 403
+            elif not is_post_public: # Anonymous user trying to access non-public post comments
+                 return {'message': 'Comments for this post are not publicly viewable.'}, 401 # Or 403
+            # If it's public, this path shouldn't be hit due to logic above.
+            # However, as a fallback, if somehow can_view_post is false for a public post, deny.
+            # This case should ideally not occur with the current logic.
+            return {'message': 'Cannot view comments.'}, 403
         # --- END PERMISSION CHECK ---
 
         comments = Comment.query.filter_by(post_id=post_id).order_by(Comment.timestamp.asc()).all()
