@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "test": "vitest",
     "cypress:open": "cypress open",
-    "cypress:run": "cypress run"
+    "cypress:run": "cypress run",
+    "cypress:ci": "cypress run --browser chrome --reporter spec",
+    "test:e2e": "cypress run",
+    "test:e2e:ci": "cypress run --browser chrome --reporter spec --quiet"
   },
   "dependencies": {
     "react": "^19.1.0",
