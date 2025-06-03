@@ -76,6 +76,10 @@ jobs:
     - name: Install frontend dependencies
       working-directory: ./frontend
       run: npm ci
+    
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
 
     # # Setup database
     # - name: Initialize database
