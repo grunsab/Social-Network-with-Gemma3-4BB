@@ -1,0 +1,13 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    # Run at 2 AM UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  comprehensive-tests:
+    uses: ./.github/workflows/ci.yml
+    with:
+      browsers: 'true'

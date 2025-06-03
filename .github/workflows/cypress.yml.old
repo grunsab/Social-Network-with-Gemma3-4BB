@@ -1,0 +1,132 @@
+name: Cypress E2E Tests
+
+on:
+  # Run on push to main branch
+  push:
+    branches: [ main ]
+  # Run on pull requests
+  pull_request:
+    branches: [ main ]
+  # Allow manual trigger
+  workflow_dispatch:
+  # Run daily at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  cypress-e2e:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, firefox, edge]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    # Install dependencies
+    - name: Install backend dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    # Setup test database
+    - name: Setup test database
+      run: |
+        export FLASK_APP=app.py
+        export DATABASE_URL=sqlite:///test.db
+        flask db upgrade
+
+    # Start servers
+    - name: Start backend server
+      run: |
+        export FLASK_APP=app.py
+        export FLASK_ENV=test
+        export SECRET_KEY=test-secret-key
+        export DATABASE_URL=sqlite:///test.db
+        python app.py > backend.log 2>&1 &
+        echo $! > backend.pid
+
+    - name: Start frontend server
+      working-directory: ./frontend
+      run: |
+        npm run dev > frontend.log 2>&1 &
+        echo $! > ../frontend.pid
+
+    - name: Wait for servers
+      run: |
+        echo "Waiting for backend..."
+        timeout 60 bash -c 'until curl -f http://localhost:5001/api/v1/categories; do sleep 1; done' || (cat backend.log && exit 1)
+        echo "Waiting for frontend..."
+        timeout 60 bash -c 'until curl -f http://localhost:5173; do sleep 1; done' || (cat frontend/frontend.log && exit 1)
+
+    # Run Cypress tests
+    - name: Run Cypress tests on ${{ matrix.browser }}
+      uses: cypress-io/github-action@v6
+      with:
+        working-directory: ./frontend
+        browser: ${{ matrix.browser }}
+        wait-on: 'http://localhost:5173'
+        wait-on-timeout: 120
+        config: video=true
+        spec: |
+          cypress/e2e/auth.cy.js
+          cypress/e2e/category.cy.js
+          cypress/e2e/feed.cy.js
+          cypress/e2e/invites.cy.js
+          cypress/e2e/posts.cy.js
+      env:
+        CYPRESS_baseUrl: http://localhost:5173
+
+    # Upload artifacts
+    - name: Upload Cypress screenshots
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: cypress-screenshots-${{ matrix.browser }}
+        path: frontend/cypress/screenshots
+        retention-days: 7
+
+    - name: Upload Cypress videos
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cypress-videos-${{ matrix.browser }}
+        path: frontend/cypress/videos
+        retention-days: 7
+
+    - name: Upload server logs
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: server-logs-${{ matrix.browser }}
+        path: |
+          backend.log
+          frontend/frontend.log
+        retention-days: 7
+
+    # Cleanup
+    - name: Stop servers
+      if: always()
+      run: |
+        if [ -f backend.pid ]; then kill $(cat backend.pid) || true; fi
+        if [ -f frontend.pid ]; then kill $(cat frontend.pid) || true; fi

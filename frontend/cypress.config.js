@@ -2,7 +2,7 @@ import { defineConfig } from "cypress";
 
 export default defineConfig({
   e2e: {
-    baseUrl: 'http://localhost:5001', // Set the base URL for cy.visit()
+    baseUrl: 'http://localhost:5173', // Frontend URL
     setupNodeEvents(on, config) {
       // implement node event listeners here
     },
@@ -23,5 +23,9 @@ export default defineConfig({
     },
     // Test isolation
     testIsolation: true,
+    // Environment variables
+    env: {
+      apiUrl: 'http://localhost:5001', // Backend API URL
+    },
   },
 });
