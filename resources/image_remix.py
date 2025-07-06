@@ -92,7 +92,7 @@ class ImageRemixResource(Resource):
             "outputType": "base64Data",
             "steps": 28,
             "guidanceScale": 7.5,
-            "strength": 9,
+            "strength": 0.9,
         }]
         
         try:
