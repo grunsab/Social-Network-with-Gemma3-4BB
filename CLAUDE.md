@@ -102,6 +102,7 @@ Key environment variables required:
 - `S3_ENDPOINT_URL`: Custom S3 endpoint (for R2)
 - `DEEPINFRA_API_KEY`: For content classification
 - `OPENAI_API_KEY`: For image generation features
+- `RUNWARE_API_KEY`: For image remixing with Flux Kontext Dev
 
 ### Frontend State Management
 - Authentication state managed via React Context (`AuthContext`)

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'; // Import Link
 import './Post.css'; // Import the CSS file
 import './ProfileImages.css'; // Import profile image styles
 import Spinner from './Spinner'; // Import Spinner
-import { FaTrashAlt, FaRegCommentDots, FaPlay, FaHeart, FaRegHeart } from 'react-icons/fa'; // Import Trash, Comment, Play, and Heart icons
+import { FaTrashAlt, FaRegCommentDots, FaPlay, FaHeart, FaRegHeart, FaMagic } from 'react-icons/fa'; // Import Trash, Comment, Play, Heart, and Magic icons
 import PlayableContentViewer from './PlayableContentViewer'; // Import the new component
 import { useAmpersoundAutocomplete } from '../hooks/useAmpersoundAutocomplete'; // Import the hook
 import ReportButton from './ReportButton'; // Import the ReportButton component
@@ -23,6 +23,12 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
   const [likes, setLikes] = useState(post.likes_count || 0);
   const [isLiked, setIsLiked] = useState(false); // This would ideally be determined by checking if currentUser.id is in a list of users who liked the post
   const [likeInProgress, setLikeInProgress] = useState(false);
+
+  // State for remix modal
+  const [showRemixModal, setShowRemixModal] = useState(false);
+  const [remixPrompt, setRemixPrompt] = useState('');
+  const [remixInProgress, setRemixInProgress] = useState(false);
+  const [remixError, setRemixError] = useState('');
 
   const commentTextareaRef = useRef(null); // Ref for comment textarea
 
@@ -241,6 +247,47 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
     }
   };
 
+  const handleRemix = async (e) => {
+    e.preventDefault();
+    if (!remixPrompt.trim()) return;
+    
+    setRemixInProgress(true);
+    setRemixError('');
+    
+    try {
+      const response = await fetch('/api/v1/remix_image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          post_id: post.id,
+          prompt: remixPrompt
+        })
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to remix image');
+      }
+      
+      const result = await response.json();
+      console.log('Image remixed successfully:', result);
+      
+      // Close modal and reset
+      setShowRemixModal(false);
+      setRemixPrompt('');
+      
+      // Optionally refresh the feed or show success message
+      alert('Image remixed successfully! Check your profile for the new post.');
+      
+    } catch (error) {
+      console.error("Error remixing image:", error);
+      setRemixError(error.message);
+    } finally {
+      setRemixInProgress(false);
+    }
+  };
+
   const handlePostComment = async (event) => {
       event.preventDefault();
       hideCommentSuggestions(); // Hide suggestions
@@ -394,6 +441,13 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
             )}
             {!currentUser && <span className="likes-count-logged-out">{likes} {likes === 1 ? 'Like' : 'Likes'}</span>}
 
+            {/* Remix Button - only for posts with images */}
+            {currentUser && post.image_url && (
+              <button onClick={() => setShowRemixModal(true)} className="icon-button remix-button" title="Remix Image">
+                <FaMagic /> <span className="post-action-label">Remix</span>
+              </button>
+            )}
+
             {/* Delete Button - only for author */}
             {isAuthor && (
                 <button onClick={handleDelete} className="icon-button delete-button" title="Delete Post">
@@ -515,6 +569,47 @@ function Post({ post, onDelete }) { // Accept post object and onDelete callback
           </div>
         )}
       </div>
+
+      {/* Remix Modal */}
+      {showRemixModal && (
+        <div className="modal-overlay" onClick={() => setShowRemixModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Remix Image</h3>
+            <p>Describe how you want to transform this image:</p>
+            
+            <form onSubmit={handleRemix}>
+              {remixError && <p className="error-message">{remixError}</p>}
+              
+              <textarea
+                value={remixPrompt}
+                onChange={(e) => setRemixPrompt(e.target.value)}
+                placeholder="e.g., 'make it look like a painting', 'add a sunset background', 'turn it into anime style'"
+                rows="4"
+                maxLength="500"
+                required
+                disabled={remixInProgress}
+                style={{ width: '100%', marginBottom: '1rem' }}
+              />
+              
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowRemixModal(false)}
+                  disabled={remixInProgress}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={remixInProgress || !remixPrompt.trim()}
+                >
+                  {remixInProgress ? <Spinner inline={true} /> : 'Remix'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
