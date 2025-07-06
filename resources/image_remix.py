@@ -84,13 +84,13 @@ class ImageRemixResource(Resource):
             current_app.logger.info(f"Runware API response: {result}")
             
             # Extract base64 image data from response
-            # Runware API returns an array of task results
-            if isinstance(result, list) and len(result) > 0:
-                task_result = result[0]
-                if task_result.get('taskType') == 'imageInference':
-                    images = task_result.get('images', [])
-                    if images and len(images) > 0:
-                        image_data = images[0].get('imageBase64Data')
+            # Runware API returns a dict with 'data' array containing task results
+            if isinstance(result, dict) and 'data' in result:
+                data_array = result['data']
+                if isinstance(data_array, list) and len(data_array) > 0:
+                    task_result = data_array[0]
+                    if task_result.get('taskType') == 'imageInference':
+                        image_data = task_result.get('imageBase64Data')
                         if image_data:
                             # Remove data URL prefix if present
                             if image_data.startswith('data:'):
