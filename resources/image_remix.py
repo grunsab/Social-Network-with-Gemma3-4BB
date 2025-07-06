@@ -91,6 +91,8 @@ class ImageRemixResource(Resource):
             "outputFormat": "JPEG",
             "outputType": "base64Data",
             "steps": 28,
+            "guidanceScale": 7.5,
+            "strength": 9,
         }]
         
         try:
