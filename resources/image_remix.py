@@ -110,7 +110,8 @@ class ImageRemixResource(Resource):
             abort(400, message="This post does not contain an image to remix")
         
         # Check if the user can access this post (public or from a friend)
-        if not original_post.is_public:
+        from models import PostPrivacy, FriendRequestStatus
+        if original_post.privacy != PostPrivacy.PUBLIC:
             # Check if the user is friends with the post author
             is_friend = False
             if current_user.id != original_post.user_id:
@@ -120,7 +121,7 @@ class ImageRemixResource(Resource):
                      (FriendRequest.receiver_id == original_post.user_id)) |
                     ((FriendRequest.sender_id == original_post.user_id) & 
                      (FriendRequest.receiver_id == current_user.id)),
-                    FriendRequest.status == 'accepted'
+                    FriendRequest.status == FriendRequestStatus.ACCEPTED
                 ).first() is not None
                 
                 if not is_friend:
