@@ -89,7 +89,8 @@ class ImageRemixResource(Resource):
             "model": "runware:106@1",  # FLUX.1 Kontext [dev] model ID
             "numberResults": 1,
             "outputFormat": "JPEG",
-            "outputType": "base64Data"
+            "outputType": "base64Data",
+            "steps": 50,
         }]
         
         try:
