@@ -56,20 +56,21 @@ class ImageRemixResource(Resource):
         }
         
         # Prepare the request payload for Runware API
-        payload = {
-            "model": "runware:106@1",  # FLUX.1 Kontext [dev] model ID
+        payload = [{
+            "taskType": "imageInference",
             "positivePrompt": prompt,
             "referenceImage": image_url,
             "width": 1024,
             "height": 1024,
+            "model": "runware:106@1",  # FLUX.1 Kontext [dev] model ID
             "numberResults": 1,
             "outputFormat": "JPEG",
             "outputType": "base64Data"
-        }
+        }]
         
         try:
             response = requests.post(
-                'https://api.runware.ai/image-inference',
+                'https://api.runware.ai/v1',
                 headers=headers,
                 json=payload,
                 timeout=60
@@ -78,20 +79,36 @@ class ImageRemixResource(Resource):
             response.raise_for_status()
             result = response.json()
             
+            current_app.logger.info(f"Runware API response: {result}")
+            
             # Extract base64 image data from response
-            if result.get('data') and len(result['data']) > 0:
-                image_data = result['data'][0].get('imageBase64Data')
-                if image_data:
-                    # Remove data URL prefix if present
-                    if image_data.startswith('data:'):
-                        image_data = image_data.split(',')[1]
-                    return image_data
+            # Runware API returns an array of task results
+            if isinstance(result, list) and len(result) > 0:
+                task_result = result[0]
+                if task_result.get('taskType') == 'imageInference':
+                    images = task_result.get('images', [])
+                    if images and len(images) > 0:
+                        image_data = images[0].get('imageBase64Data')
+                        if image_data:
+                            # Remove data URL prefix if present
+                            if image_data.startswith('data:'):
+                                image_data = image_data.split(',')[1]
+                            return image_data
             
             current_app.logger.error(f"Unexpected Runware API response structure: {result}")
             return None
             
         except requests.exceptions.RequestException as e:
             current_app.logger.error(f"Runware API request error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    current_app.logger.error(f"Runware API error response: {error_data}")
+                except:
+                    current_app.logger.error(f"Runware API error response text: {e.response.text}")
+            return None
+        except Exception as e:
+            current_app.logger.error(f"Unexpected error calling Runware API: {e}")
             return None
 
     @login_required
