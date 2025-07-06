@@ -37,6 +37,7 @@ from resources.invite import InviteResource
 from resources.report import ReportResource, ReportListResource, AdminReportListResource, AdminReportActionResource
 from resources.notification import NotificationListResource, NotificationResource, UnreadCountResource
 from resources.image_generation import ImageGenerationResource # Added import
+from resources.image_remix import ImageRemixResource # Added import for image remixing
 from resources.ampersound import AmpersoundListResource, AmpersoundResource, MyAmpersoundsResource, AmpersoundSearchResource # Added Ampersound resources
 from resources.ampersound_youtube import AmpersoundFromYoutubeResource # New resource for YouTube to Ampersound
 from resources.admin import AdminAmpersoundApprovalList, AdminAmpersoundApprovalAction # Added Admin Ampersound resources
@@ -73,6 +74,7 @@ class Config:
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     DEEPINFRA_API_BASE = "https://api.deepinfra.com/v1/openai" # Centralize this
     DEEPINFRA_API_KEY = os.environ.get('DEEPINFRA_API_KEY') # Added DeepInfra API Key
+    RUNWARE_API_KEY = os.environ.get('RUNWARE_API_KEY') # Added Runware API Key for image remixing
 
     @staticmethod
     def init_app(app):
@@ -376,6 +378,7 @@ def create_app(config_name='default', overrides=None): # Add overrides parameter
         api.add_resource(NotificationResource, '/api/v1/notifications/<int:notif_id>')
         api.add_resource(UnreadCountResource, '/api/v1/notifications/unread_count')
         api.add_resource(ImageGenerationResource, '/api/v1/generate_image') # Added route for image generation
+        api.add_resource(ImageRemixResource, '/api/v1/remix_image') # Added route for image remixing
         api.add_resource(AmpersoundListResource, '/api/v1/ampersounds')
         api.add_resource(AmpersoundFromYoutubeResource, '/api/v1/ampersounds/from_youtube') # New route for YouTube to Ampersound
         api.add_resource(AmpersoundResource, '/api/v1/ampersounds/<int:sound_id>', '/api/v1/ampersounds/<string:username>/<string:sound_name>')

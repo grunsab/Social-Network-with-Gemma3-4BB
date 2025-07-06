@@ -253,6 +253,8 @@ class Post(db.Model):
     category_scores = db.relationship('PostCategoryScore', lazy=True, cascade='all, delete-orphan')
     privacy = db.Column(db.Enum(PostPrivacy), default=PostPrivacy.PUBLIC, nullable=False)  # Default to public
     likes = db.relationship('PostLike', backref='post', lazy=True, cascade='all, delete-orphan')
+    parent_post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)  # For tracking remixed posts
+    parent_post = db.relationship('Post', remote_side=[id], backref='remixes')
 
     comments_count = column_property(
         select(func.count(Comment.id))
