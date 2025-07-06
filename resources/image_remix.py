@@ -83,7 +83,7 @@ class ImageRemixResource(Resource):
             "taskType": "imageInference",
             "taskUUID": task_uuid,
             "positivePrompt": prompt,
-            "referenceImageBase64": reference_image_base64,
+            "seedImage": reference_image_base64,
             "width": 1024,
             "height": 1024,
             "model": "runware:106@1",  # FLUX.1 Kontext [dev] model ID
