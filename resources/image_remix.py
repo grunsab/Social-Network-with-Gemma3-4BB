@@ -42,6 +42,22 @@ class ImageRemixResource(Resource):
                 return None
         return file_url
 
+    def _download_image_to_base64(self, image_url):
+        """Download image from URL and convert to base64."""
+        try:
+            response = requests.get(image_url, timeout=30)
+            response.raise_for_status()
+            
+            # Convert to base64
+            image_base64 = base64.b64encode(response.content).decode('utf-8')
+            return image_base64
+        except requests.exceptions.RequestException as e:
+            current_app.logger.error(f"Error downloading image from {image_url}: {e}")
+            return None
+        except Exception as e:
+            current_app.logger.error(f"Error converting image to base64: {e}")
+            return None
+
     def _call_runware_api(self, image_url, prompt):
         """Call Runware API with Flux Kontext Dev for image remixing."""
         runware_api_key = current_app.config.get('RUNWARE_API_KEY')
@@ -49,6 +65,12 @@ class ImageRemixResource(Resource):
         if not runware_api_key:
             current_app.logger.error("RUNWARE_API_KEY not configured")
             abort(500, message="Image remix service is not configured")
+        
+        # Download and convert the reference image to base64
+        reference_image_base64 = self._download_image_to_base64(image_url)
+        if not reference_image_base64:
+            current_app.logger.error(f"Failed to download or convert reference image: {image_url}")
+            abort(500, message="Failed to process reference image")
         
         headers = {
             'Authorization': f'Bearer {runware_api_key}',
@@ -61,7 +83,7 @@ class ImageRemixResource(Resource):
             "taskType": "imageInference",
             "taskUUID": task_uuid,
             "positivePrompt": prompt,
-            "referenceImage": image_url,
+            "referenceImageBase64": reference_image_base64,
             "width": 1024,
             "height": 1024,
             "model": "runware:106@1",  # FLUX.1 Kontext [dev] model ID
