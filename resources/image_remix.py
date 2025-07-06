@@ -56,8 +56,10 @@ class ImageRemixResource(Resource):
         }
         
         # Prepare the request payload for Runware API
+        task_uuid = str(uuid.uuid4())  # Generate a unique task UUID
         payload = [{
             "taskType": "imageInference",
+            "taskUUID": task_uuid,
             "positivePrompt": prompt,
             "referenceImage": image_url,
             "width": 1024,
