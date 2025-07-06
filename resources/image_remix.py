@@ -86,7 +86,7 @@ class ImageRemixResource(Resource):
             "seedImage": reference_image_base64,
             "width": 1024,
             "height": 1024,
-            "model": "bfl:3@1",  # FLUX.1 Kontext [dev] model ID
+            "model": "runware:106@1",  # FLUX.1 Kontext [dev] model ID
             "numberResults": 1,
             "outputFormat": "JPEG",
             "outputType": "base64Data",
